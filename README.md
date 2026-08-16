@@ -17,17 +17,22 @@ asserting exactly that.
 
 ## Usage
 
-On a fresh Debian or Ubuntu VM:
+On a fresh Debian or Ubuntu VM, one command:
 
 ```sh
-sudo apt-get install -y git
-git clone https://github.com/timche/claude-sandbox.git ~/claude-sandbox
-~/claude-sandbox/setup.sh
+curl -fsSL https://raw.githubusercontent.com/timche/claude-sandbox/main/setup.sh | bash
 ```
 
-No authentication needed — this repo is public, and `git` is the only thing a
-bare image is missing. `setup.sh` installs `gh` along the way, which is what
-you then use to fetch the private half.
+No authentication needed — this repo is public. Piped in like that, `setup.sh`
+installs `git` if the image lacks it, clones the repo to `~/claude-sandbox`,
+and hands over to the copy inside it. Re-running pulls and goes again.
+
+The clone isn't a formality: `install.sh` symlinks your dotfiles out of the
+repo, so it has to stay on disk. `~/claude-sandbox` is where it lives, or set
+`CLAUDE_SANDBOX_DIR` to put it elsewhere.
+
+If the image has no `curl` either, `sudo apt-get install -y curl` first, or
+clone by hand and run `~/claude-sandbox/setup.sh` directly — both work.
 
 `setup.sh` runs both halves:
 
