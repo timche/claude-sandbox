@@ -67,10 +67,10 @@ if ! gh auth status >/dev/null 2>&1; then
   echo "  - gh auth login, then rerun install.sh so it can add the gh-stack extension."
 fi
 
-# keys.sh generated it and printed it above; registering it is the manual half.
+# keys.sh generated it, trusted it locally, and printed it above. GitHub is the
+# half it cannot do.
 if [ -f "$HOME/.ssh/git-signing.pub" ]; then
-  echo "  - gh ssh-key add ~/.ssh/git-signing.pub --type signing, and put the same"
-  echo "    line in home/.ssh/allowed_signers here."
+  echo "  - gh ssh-key add ~/.ssh/git-signing.pub --type signing"
 fi
 
 cat <<'EOF'

@@ -100,10 +100,12 @@ stored:
   `~/.ssh/git-signing`)
 - the account password, by `provision.sh`
 
-A generated signing key means `home/.ssh/allowed_signers` is a per-machine
-list appended to by hand, not a single tracked key. `keys.sh` prints the line
-and the two places it has to go (GitHub, and that file) but writes to neither.
-Until both are done, `git log --format='%G?'` reports `N`.
+`~/.ssh/allowed_signers` — the trust list, not the key — is written by
+`keys.sh` rather than tracked here, because a per-machine key makes a shared
+copy a list none of the machines agrees with. It also removes the symlink
+earlier versions installed, so an upgraded box does not write a local key into
+tracked content. Registering the public key with GitHub stays manual by
+design; `keys.sh` prints the command and runs nothing against your account.
 
 ## Environment knobs
 

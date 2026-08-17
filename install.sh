@@ -74,5 +74,4 @@ link .gitconfig
 link .p10k.zsh
 link .zshrc
 link .config/herdr/config.toml
-link .ssh/allowed_signers
 link .terminfo/x/xterm-ghostty

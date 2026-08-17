@@ -85,14 +85,26 @@ publish a package tree per release, so those repository URLs are built from
 
 `keys.sh` runs as part of `setup.sh`, or on its own at any time. It generates
 the commit-signing key with `ssh-keygen -t ed25519`, so the private half is
-born on the VM and never travels, and prints the public half at the end of the
-run. That key is new, which means two things have to happen before a signature
-from it verifies anywhere: `gh ssh-key add ~/.ssh/git-signing.pub --type
-signing`, and the same line added to `home/.ssh/allowed_signers` in this repo.
-Until then `git log --format='%G?'` reports `N`, not `G`.
+born on the VM and never travels, and writes `~/.ssh/allowed_signers` — the
+trust list git checks a signature against — with the key it just made. Local
+verification therefore works as soon as it finishes.
 
-That is the trade for keys that stay put: `allowed_signers` becomes a list with
-one entry per machine rather than a single key you carry around.
+That file is not tracked here, and this is why: every machine generates its own
+key, so a copy in the repo would be a trust list none of them agrees with. A
+VM verifies its own commits; commits made on another one read as unverified
+locally, which for a throwaway sandbox is the right trade. `keys.sh` also
+unlinks the symlink earlier versions installed, so an upgrading box does not
+write a machine-local key back into tracked content.
+
+What is left is the half only you can do, and `keys.sh` prints the key and the
+command for it:
+
+```sh
+gh ssh-key add ~/.ssh/git-signing.pub --type signing
+```
+
+Until that lands, GitHub shows the commits unverified even though `git log
+--format='%G?'` reports `G` on the box itself.
 
 Then paste the public keys allowed to SSH in, one per line. Existing entries
 are not duplicated, and modes are set to 600 / 644 / 600.
@@ -128,7 +140,6 @@ Anything needing a browser or a login:
 | `home/.zshrc` `.p10k.zsh` `.bashrc` | `$HOME` | Shell, prompt, bun and fnm on `PATH` |
 | `home/.gitconfig` | `$HOME` | SSH-signed commits, `gh` as the credential helper |
 | `home/.config/herdr/config.toml` | `$HOME` | Toast delivery and agent panel sort |
-| `home/.ssh/allowed_signers` | `$HOME` | Public halves of the signing keys |
 | `home/.terminfo/x/xterm-ghostty` | `$HOME` | Ghostty terminfo for SSH sessions |
 | `system/docker/daemon.json` | `/etc/docker/` | Binds to localhost, caps log size |
 | `system/ssh/10-hardening.conf` | `/etc/ssh/sshd_config.d/` | Keys only, no root, `AllowUsers` |
@@ -174,9 +185,9 @@ restart and `enable --now tailscaled` are the one part no container can cover.
 ## What's deliberately left out
 
 Credentials, obviously: `~/.config/gh/hosts.yml` is a `gh auth login` away, and
-the SSH keys are `keys.sh`'s business — the signing key generated there, the
-`authorized_keys` pasted in. `btop.conf` is left out too — it is all defaults,
-which btop rewrites on exit.
+the SSH keys are `keys.sh`'s business — the signing key and its
+`allowed_signers` generated there, the `authorized_keys` pasted in.
+`btop.conf` is left out too — it is all defaults, which btop rewrites on exit.
 
 Anything under `~/.claude` belongs in `claude-dotfiles`, not here.
 

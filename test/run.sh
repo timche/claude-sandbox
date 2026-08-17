@@ -89,6 +89,27 @@ for image in "${images[@]}"; do
       stage_failed=1
     fi
 
+    # setup.sh skipped keys.sh for want of a terminal, so drive it under a pty
+    # from bsdutils' script(1) — Essential, so it is on every Debian. The empty
+    # line ends the authorized_keys paste. Signing a commit and verifying it is
+    # the assertion: it exercises the generated key and the trust list keys.sh
+    # writes, and it fails if either the key or the git config is wrong.
+    echo "--- keys.sh"
+    if docker exec -u "$user" -e HOME="/home/$user" "$container" bash -c "
+      set -e
+      printf '\n' | script -qec /home/$user/claude-sandbox/keys.sh /dev/null
+      test ! -L /home/$user/.ssh/allowed_signers
+      rm -rf /tmp/signing && mkdir /tmp/signing && cd /tmp/signing
+      git init -q .
+      git commit --allow-empty -q -m signed
+      git log --format='%G?' -1 | grep -qx G
+    " >>"$log" 2>&1; then
+      echo "  ok    keys.sh generates a signing key that verifies"
+    else
+      echo "  FAIL  keys.sh generates a signing key that verifies"
+      stage_failed=1
+    fi
+
     # setup.sh leaves the box unhardened, since keys.sh cannot prompt without a
     # terminal. Seed a key the way a real run would and the drop-in should land.
     echo "--- harden-ssh.sh"

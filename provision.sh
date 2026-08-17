@@ -198,8 +198,8 @@ signing_key="$home/.ssh/git-signing.pub"
 if [ -f "$signing_key" ]; then
   cat <<EOF
 
-Signing key, public half — register it with GitHub and in the repo's
-home/.ssh/allowed_signers, or commits signed here will not verify:
+Signing key, public half — this box trusts it already; GitHub will not until
+you run 'gh ssh-key add ~/.ssh/git-signing.pub --type signing':
 
 $(sed 's/^/    /' "$signing_key")
 EOF

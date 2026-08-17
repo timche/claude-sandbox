@@ -27,8 +27,7 @@ check() {
 # Symlinks. -L and -e together mean the link exists and its target does too, so
 # a link left pointing at a moved file counts as a failure.
 for path in .zshrc .p10k.zsh .bashrc .gitconfig \
-            .config/herdr/config.toml .ssh/allowed_signers \
-            .terminfo/x/xterm-ghostty; do
+            .config/herdr/config.toml .terminfo/x/xterm-ghostty; do
   check "$path is a live symlink" "[ -L \"\$HOME/$path\" ] && [ -e \"\$HOME/$path\" ]"
 done
 
