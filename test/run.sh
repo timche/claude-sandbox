@@ -71,6 +71,24 @@ for image in "${images[@]}"; do
       echo "  FAIL  install.sh is not idempotent"
       stage_failed=1
     fi
+
+    # setup.sh leaves the box unhardened, since keys.sh cannot prompt without a
+    # terminal. Seed a key the way a real run would and the drop-in should land.
+    echo "--- harden-ssh.sh"
+    docker exec -u "$user" -e HOME="/home/$user" "$container" bash -c "
+      set -e
+      mkdir -p /home/$user/.ssh
+      chmod 700 /home/$user/.ssh
+      ssh-keygen -q -t ed25519 -N '' -C $user -f /tmp/$user
+      install -m 0600 /tmp/$user.pub /home/$user/.ssh/authorized_keys
+    " >>"$log" 2>&1
+
+    if run_in_container "$container" harden-ssh.sh >>"$log" 2>&1; then
+      run_in_container "$container" test/assert.sh || stage_failed=1
+    else
+      echo "  FAIL  harden-ssh.sh exited non-zero"
+      stage_failed=1
+    fi
   fi
 
   if [ "$stage_failed" -ne 0 ]; then

@@ -34,16 +34,17 @@ repo, so it has to stay on disk. `~/claude-sandbox` is where it lives, or set
 If the image has no `curl` either, `sudo apt-get install -y curl` first, or
 clone by hand and run `~/claude-sandbox/setup.sh` directly — both work.
 
-`setup.sh` runs both halves:
+`setup.sh` runs the halves in order:
 
-- `bootstrap-system.sh` — needs sudo, run once. apt packages, the docker,
-  github-cli and tailscale repositories, `/etc/docker/daemon.json`, the sshd
-  hardening drop-in, docker group membership, and zsh as the login shell.
+- `bootstrap-system.sh` — needs sudo, run once. apt upgrade and packages, the
+  docker, github-cli and tailscale repositories, `/etc/docker/daemon.json`,
+  unattended-upgrades, docker group membership, and zsh as the login shell.
 - `install.sh` — no sudo, safe to re-run. oh-my-zsh, powerlevel10k, bun, fnm
   and node, Claude Code, herdr, the `gh-stack` extension, then the symlinks.
 - `keys.sh` — prompts for the SSH keys, which is the one credential step that
   can be scripted. Skipped when there is no terminal to prompt at, so
   `setup.sh` stays usable from CI.
+- `harden-ssh.sh` — installs the sshd drop-in, last of all.
 
 Both distributions are supported from the same scripts. Docker and tailscale
 publish separate package trees, so the repository URLs are built from `ID` and
@@ -63,6 +64,19 @@ key is caught here rather than surfacing later as commits that will not verify.
 
 Then paste the public keys allowed to SSH in, one per line. Existing entries
 are not duplicated, and modes are set to 600 / 644 / 600.
+
+### Hardening
+
+`harden-ssh.sh` is what turns password logins off, and it runs after `keys.sh`
+rather than as part of the system bootstrap. That ordering is the whole point:
+harden a fresh VM before an `authorized_keys` exists and the only way back in
+is the provider's console. It refuses when the user it is hardening has no
+keys, and says how to run it again once they do — `FORCE_HARDEN=true`
+overrides that if you are sure of another way in.
+
+The drop-in is validated with `sshd -t` before anything is restarted, and
+removed again if sshd rejects it. It takes the user to allow as its argument,
+defaulting to whoever runs it.
 
 ### What stays manual
 
@@ -96,7 +110,9 @@ here depends on the account being named `timche`.
 `test/run.sh` provisions a throwaway container per distribution, runs
 `setup.sh` in it as an unprivileged sudo user, asserts the result, then runs
 `install.sh` a second time and asserts again — the repeat is what keeps
-`install.sh` honest about being safe to re-run.
+`install.sh` honest about being safe to re-run. Finally it seeds an
+`authorized_keys`, runs `harden-ssh.sh` and asserts once more, so both the
+refusal and the drop-in are covered.
 
 ```sh
 test/run.sh                  # debian:13 and ubuntu:24.04
@@ -115,8 +131,8 @@ exists.
 
 The same two images run in CI on every push and pull request
 (`.github/workflows/test.yml`). Service management is skipped where
-`/run/systemd/system` is absent, so `systemctl restart docker`, `reload ssh`
-and `enable --now tailscaled` are the one part no container can cover.
+`/run/systemd/system` is absent, so `systemctl restart docker`, the `ssh`
+restart and `enable --now tailscaled` are the one part no container can cover.
 
 ## What's deliberately left out
 

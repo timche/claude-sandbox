@@ -74,12 +74,26 @@ check "jq installed"            'command -v jq'
 check "ssh-keygen installed"    'command -v ssh-keygen'
 check "sshd installed"          '[ -x /usr/sbin/sshd ]'
 check "daemon.json installed"   'grep -q 127.0.0.1 /etc/docker/daemon.json'
-check "sshd drop-in names this user" \
-  'grep -qx "AllowUsers $USER" /etc/ssh/sshd_config.d/10-hardening.conf'
-check "sshd drop-in kept no placeholder" \
-  '[ -f /etc/ssh/sshd_config.d/10-hardening.conf ] && ! grep -q __USER__ /etc/ssh/sshd_config.d/10-hardening.conf'
-check "sshd drop-in disables passwords" \
-  'grep -qx "PasswordAuthentication no" /etc/ssh/sshd_config.d/10-hardening.conf'
+check "unattended-upgrades switched on" \
+  'grep -q "Unattended-Upgrade \"1\"" /etc/apt/apt.conf.d/20auto-upgrades'
+
+# harden-ssh.sh holds the drop-in back until there is a key to log in with, so
+# which half of this is asserted depends on whether run.sh has seeded one yet.
+# Both halves matter: the refusal is what keeps a fresh VM reachable.
+if [ -s "$HOME/.ssh/authorized_keys" ]; then
+  check "sshd drop-in names this user" \
+    'grep -qx "AllowUsers $USER" /etc/ssh/sshd_config.d/10-hardening.conf'
+  check "sshd drop-in kept no placeholder" \
+    '[ -f /etc/ssh/sshd_config.d/10-hardening.conf ] && ! grep -q __USER__ /etc/ssh/sshd_config.d/10-hardening.conf'
+  check "sshd drop-in disables passwords" \
+    'grep -qx "PasswordAuthentication no" /etc/ssh/sshd_config.d/10-hardening.conf'
+  check "sshd accepts the drop-in" 'sudo /usr/sbin/sshd -t'
+else
+  check "no drop-in until there is a key to log in with" \
+    '[ ! -f /etc/ssh/sshd_config.d/10-hardening.conf ]'
+  check "harden-ssh.sh refuses rather than failing the run" \
+    '"$HOME/claude-sandbox/harden-ssh.sh"'
+fi
 
 # keys.sh prompts for a paste. If it ever stops bailing out without a terminal,
 # setup.sh blocks forever here instead of finishing.

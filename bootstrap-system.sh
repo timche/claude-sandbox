@@ -1,9 +1,14 @@
 #!/bin/bash
 
-# System setup for a bare Debian or Ubuntu VM: packages, docker, tailscale,
-# sshd hardening. Needs sudo, and only has to run once.
+# System setup for a bare Debian or Ubuntu VM: packages, docker, tailscale.
+# Needs sudo, and only has to run once.
+#
+# The sshd drop-in is not installed here — see harden-ssh.sh, which setup.sh
+# runs once there are keys to log in with.
 
 set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -30,9 +35,16 @@ fi
 # hooks parse with, and ssh-keygen out of openssh-client is what git signs
 # commits with — none of the three are obvious from their names.
 sudo apt-get update
+sudo apt-get upgrade -y
 sudo apt-get install -y \
   btop ca-certificates curl git jq openssh-client openssh-server sudo \
   unattended-upgrades unzip vim zsh zsh-syntax-highlighting
+
+# Installing the package does not reliably imply it is switched on.
+sudo tee /etc/apt/apt.conf.d/20auto-upgrades >/dev/null <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
 
 # Third-party repositories. Docker and tailscale publish per-distribution
 # trees; the github-cli one is shared.
@@ -69,15 +81,11 @@ sudo apt-get install -y gh tailscale \
 
 sudo install -m 0644 "$repo/system/docker/daemon.json" /etc/docker/daemon.json
 
-sudo install -d -m 0755 /etc/ssh/sshd_config.d
-sed "s/__USER__/$USER/" "$repo/system/ssh/10-hardening.conf" \
-  | sudo tee /etc/ssh/sshd_config.d/10-hardening.conf >/dev/null
-
 # Skipped inside containers, where there is no init to talk to.
 if [ -d /run/systemd/system ]; then
   sudo systemctl restart docker
-  sudo systemctl reload ssh || sudo systemctl restart ssh
   sudo systemctl enable --now tailscaled
+  sudo systemctl enable --now unattended-upgrades
 fi
 
 sudo usermod -aG docker "$USER"
