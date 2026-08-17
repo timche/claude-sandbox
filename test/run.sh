@@ -90,23 +90,27 @@ for image in "${images[@]}"; do
     fi
 
     # setup.sh skipped keys.sh for want of a terminal, so drive it under a pty
-    # from bsdutils' script(1) — Essential, so it is on every Debian. The empty
-    # line ends the authorized_keys paste. Signing a commit and verifying it is
-    # the assertion: it exercises the generated key and the trust list keys.sh
-    # writes, and it fails if either the key or the git config is wrong.
+    # from bsdutils' script(1) — Essential, so it is on every Debian. A throwaway
+    # key stands in for the paste, and the empty line after it ends the
+    # authorized_keys list. Signing a commit and verifying it is the assertion:
+    # it exercises the derived .pub and the trust list keys.sh writes, and fails
+    # if either the paste handling or the git config is wrong.
     echo "--- keys.sh"
     if docker exec -u "$user" -e HOME="/home/$user" "$container" bash -c "
       set -e
-      printf '\n' | script -qec /home/$user/claude-sandbox/keys.sh /dev/null
+      ssh-keygen -q -t ed25519 -N '' -C pasted -f /tmp/pasted
+      { cat /tmp/pasted; printf '\n'; } |
+        script -qec /home/$user/claude-sandbox/keys.sh /dev/null
       test ! -L /home/$user/.ssh/allowed_signers
+      cmp -s /tmp/pasted /home/$user/.ssh/git-signing
       rm -rf /tmp/signing && mkdir /tmp/signing && cd /tmp/signing
       git init -q .
       git commit --allow-empty -q -m signed
       git log --format='%G?' -1 | grep -qx G
     " >>"$log" 2>&1; then
-      echo "  ok    keys.sh generates a signing key that verifies"
+      echo "  ok    keys.sh installs a pasted signing key that verifies"
     else
-      echo "  FAIL  keys.sh generates a signing key that verifies"
+      echo "  FAIL  keys.sh installs a pasted signing key that verifies"
       stage_failed=1
     fi
 

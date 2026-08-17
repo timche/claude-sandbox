@@ -73,9 +73,9 @@ set would otherwise expire out of sudo's timestamp partway through.
 - `install.sh` — no sudo, safe to re-run. oh-my-zsh, powerlevel10k, bun, fnm
   and node, Claude Code, herdr, the `gh-stack` extension, the signing key's
   registration with GitHub, then the symlinks.
-- `keys.sh` — generates the commit-signing key and prompts for the
-  `authorized_keys`. Skipped when there is no terminal to prompt at, so
-  `setup.sh` stays usable from CI.
+- `keys.sh` — prompts for the commit-signing key and the `authorized_keys`.
+  Skipped when there is no terminal to prompt at, so `setup.sh` stays usable
+  from CI.
 - `harden-ssh.sh` — installs the sshd drop-in, last of all.
 
 `register-signing-key.sh` is called by the two above rather than by `setup.sh`,
@@ -87,18 +87,22 @@ publish a package tree per release, so those repository URLs are built from
 
 ### SSH keys
 
-`keys.sh` runs as part of `setup.sh`, or on its own at any time. It generates
-the commit-signing key with `ssh-keygen -t ed25519`, so the private half is
-born on the VM and never travels, and writes `~/.ssh/allowed_signers` — the
-trust list git checks a signature against — with the key it just made. Local
-verification therefore works as soon as it finishes.
+`keys.sh` runs as part of `setup.sh`, or on its own at any time. Paste the
+private signing key when it asks — the public half is derived with
+`ssh-keygen -y`, so there is only one thing to paste, and deriving it doubles
+as validation: a truncated paste fails before anything is written.
 
-That file is not tracked here, and this is why: every machine generates its own
-key, so a copy in the repo would be a trust list none of them agrees with. A
-VM verifies its own commits; commits made on another one read as unverified
-locally, which for a throwaway sandbox is the right trade. `keys.sh` also
-unlinks the symlink earlier versions installed, so an upgrading box does not
-write a machine-local key back into tracked content.
+The same key goes on every VM, which is the point: one key registered with
+GitHub once, and commits verify wherever they were made. The cost is that the
+private half travels, so a compromised box means rotating it everywhere.
+Agent forwarding would avoid that, but sessions here outlive the connection
+that started them and a detached agent with no forwarded socket cannot sign.
+
+`keys.sh` then writes `~/.ssh/allowed_signers` — the trust list git checks a
+signature against — so local verification works as soon as it finishes. That
+file is not tracked here: it is derived from a private key, and deriving it
+locally costs nothing. `keys.sh` also unlinks the symlink earlier versions
+installed, so an upgrading box does not write back into tracked content.
 
 GitHub is the other half, and `register-signing-key.sh` does it once `gh` can.
 Both `install.sh` and `keys.sh` call it, and it is runnable on its own:
@@ -200,9 +204,9 @@ restart and `enable --now tailscaled` are the one part no container can cover.
 ## What's deliberately left out
 
 Credentials, obviously: `~/.config/gh/hosts.yml` is a `gh auth login` away, and
-the SSH keys are `keys.sh`'s business — the signing key and its
-`allowed_signers` generated there, the `authorized_keys` pasted in.
-`btop.conf` is left out too — it is all defaults, which btop rewrites on exit.
+the SSH keys are `keys.sh`'s business — the signing key and the
+`authorized_keys` pasted in, `allowed_signers` derived there. `btop.conf` is
+left out too — it is all defaults, which btop rewrites on exit.
 
 Anything under `~/.claude` belongs in `claude-dotfiles`, not here.
 

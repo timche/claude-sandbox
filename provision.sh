@@ -191,19 +191,9 @@ One more thing worth knowing: docker writes its own iptables rules and goes
 around a host firewall, so a firewall at the provider is the one that counts.
 EOF
 
-# Last, so the two things this run produced and cannot show again are the ones
-# still on screen.
-
-signing_key="$home/.ssh/git-signing.pub"
-if [ -f "$signing_key" ]; then
-  cat <<EOF
-
-Signing key, public half — this box trusts it already; GitHub will not until
-'gh auth login' and a rerun of install.sh:
-
-$(sed 's/^/    /' "$signing_key")
-EOF
-fi
+# Last, so the one thing this run produced and cannot show again is still on
+# screen. The signing key was pasted in, not made here, so keys.sh printing it
+# once is enough.
 
 if [ -n "$generated_password" ]; then
   cat <<EOF
