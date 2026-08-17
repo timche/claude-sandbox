@@ -104,8 +104,16 @@ stored:
 `keys.sh` rather than tracked here, because a per-machine key makes a shared
 copy a list none of the machines agrees with. It also removes the symlink
 earlier versions installed, so an upgraded box does not write a local key into
-tracked content. Registering the public key with GitHub stays manual by
-design; `keys.sh` prints the command and runs nothing against your account.
+tracked content.
+
+`register-signing-key.sh` puts the public half on the GitHub account. It needs
+the `write:ssh_signing_key` scope, which is separate from `admin:public_key`
+and which `gh auth login` does not request. Every blocker — no key, no `gh`,
+not logged in, no scope — exits 0 with a message, because on a fresh VM all of
+them are true when `setup.sh` runs and the run has to carry on. `install.sh`
+and `keys.sh` both call it: the first is the script you rerun after logging in,
+the second because generating a key there orphans the one `install.sh`
+registered earlier in the same run.
 
 ## Environment knobs
 

@@ -16,6 +16,7 @@
 
 set -euo pipefail
 
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 signing_key="$HOME/.ssh/git-signing"
 authorized_keys="$HOME/.ssh/authorized_keys"
 allowed_signers="$HOME/.ssh/allowed_signers"
@@ -160,10 +161,15 @@ The signing key, public half:
 
 $(sed 's/^/    /' "$signing_key.pub")
 
-This machine already trusts it. GitHub does not until you say so, and that is
-the one step nothing here can do for you:
+This machine already trusts it. GitHub is the other half — registered here when
+gh is logged in, and by install.sh once it is:
+EOF
 
-    gh ssh-key add $signing_key.pub --type signing
+  # Generating a key here after install.sh has already run means install.sh
+  # registered the key this one replaces, so the attempt belongs on both paths.
+  "$repo/register-signing-key.sh" "$signing_key.pub"
+
+  cat <<'EOF'
 
 Locally, check signing works with:
 

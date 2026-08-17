@@ -199,7 +199,7 @@ if [ -f "$signing_key" ]; then
   cat <<EOF
 
 Signing key, public half — this box trusts it already; GitHub will not until
-you run 'gh ssh-key add ~/.ssh/git-signing.pub --type signing':
+'gh auth login' and a rerun of install.sh:
 
 $(sed 's/^/    /' "$signing_key")
 EOF

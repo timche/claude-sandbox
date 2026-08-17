@@ -71,11 +71,15 @@ set would otherwise expire out of sudo's timestamp partway through.
   docker, github-cli and tailscale repositories, `/etc/docker/daemon.json`,
   unattended-upgrades, docker group membership, and zsh as the login shell.
 - `install.sh` — no sudo, safe to re-run. oh-my-zsh, powerlevel10k, bun, fnm
-  and node, Claude Code, herdr, the `gh-stack` extension, then the symlinks.
+  and node, Claude Code, herdr, the `gh-stack` extension, the signing key's
+  registration with GitHub, then the symlinks.
 - `keys.sh` — generates the commit-signing key and prompts for the
   `authorized_keys`. Skipped when there is no terminal to prompt at, so
   `setup.sh` stays usable from CI.
 - `harden-ssh.sh` — installs the sshd drop-in, last of all.
+
+`register-signing-key.sh` is called by the two above rather than by `setup.sh`,
+and runs on its own too.
 
 Debian only, and anything else is refused up front. Docker and tailscale
 publish a package tree per release, so those repository URLs are built from
@@ -96,15 +100,25 @@ locally, which for a throwaway sandbox is the right trade. `keys.sh` also
 unlinks the symlink earlier versions installed, so an upgrading box does not
 write a machine-local key back into tracked content.
 
-What is left is the half only you can do, and `keys.sh` prints the key and the
-command for it:
+GitHub is the other half, and `register-signing-key.sh` does it once `gh` can.
+Both `install.sh` and `keys.sh` call it, and it is runnable on its own:
 
 ```sh
-gh ssh-key add ~/.ssh/git-signing.pub --type signing
+gh auth login
+gh auth refresh -h github.com -s write:ssh_signing_key
+~/claude-sandbox/register-signing-key.sh
 ```
 
-Until that lands, GitHub shows the commits unverified even though `git log
---format='%G?'` reports `G` on the box itself.
+That scope is separate from `admin:public_key` — GitHub keeps signing keys and
+authentication keys in different collections, and `gh auth login` asks for
+neither. Everything that stops the script is a skip rather than a failure, and
+it says which one: no key, no `gh`, not logged in, or no scope. So the first
+run of a fresh VM always skips it, which is why rerunning `install.sh` after
+logging in is the documented step.
+
+The key is added under the machine's hostname, and a key already on the
+account is left alone. Until it lands, GitHub shows the commits unverified even
+though `git log --format='%G?'` reports `G` on the box itself.
 
 Then paste the public keys allowed to SSH in, one per line. Existing entries
 are not duplicated, and modes are set to 600 / 644 / 600.
@@ -126,7 +140,8 @@ defaulting to whoever runs it.
 
 Anything needing a browser or a login:
 
-1. `gh auth login`, then rerun `install.sh` for the `gh-stack` extension.
+1. `gh auth login` — add `-s write:ssh_signing_key` so the signing key can be
+   registered — then rerun `install.sh` for that and the `gh-stack` extension.
 2. `sudo tailscale up`
 3. `claude`, then `/login`
 4. Log out and back in for the docker group and login shell.

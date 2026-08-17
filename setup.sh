@@ -64,13 +64,9 @@ echo
 # This repo clones without authentication, so gh usually is not logged in yet —
 # but it will be if you came back here after fetching claude-dotfiles.
 if ! gh auth status >/dev/null 2>&1; then
-  echo "  - gh auth login, then rerun install.sh so it can add the gh-stack extension."
-fi
-
-# keys.sh generated it, trusted it locally, and printed it above. GitHub is the
-# half it cannot do.
-if [ -f "$HOME/.ssh/git-signing.pub" ]; then
-  echo "  - gh ssh-key add ~/.ssh/git-signing.pub --type signing"
+  echo "  - gh auth login, then rerun install.sh for the gh-stack extension and to"
+  echo "    register the signing key. That needs a scope gh does not ask for:"
+  echo "    gh auth refresh -h github.com -s write:ssh_signing_key"
 fi
 
 cat <<'EOF'

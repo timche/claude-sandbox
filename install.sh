@@ -44,13 +44,19 @@ if ! command -v herdr >/dev/null 2>&1; then
   curl -fsSL https://herdr.dev/install.sh | sh
 fi
 
-# Needs an authenticated gh, so it is skipped rather than failing the run.
+# Both need an authenticated gh, so they are skipped rather than failing the
+# run. Rerunning this script after 'gh auth login' is what picks them up, which
+# is why registering the signing key lives here and not in keys.sh: on a fresh
+# VM gh is logged in at neither, and this is the script you come back to.
 if gh auth status >/dev/null 2>&1; then
   if ! gh extension list 2>/dev/null | grep -q gh-stack; then
     gh extension install github/gh-stack
   fi
+
+  "$repo/register-signing-key.sh"
 else
   echo "gh is not authenticated — run 'gh auth login', then rerun to get gh-stack" >&2
+  echo "and to register the signing key" >&2
 fi
 
 # Symlinks

@@ -107,6 +107,11 @@ fi
 check "keys.sh exits without a terminal" \
   '"$HOME/claude-sandbox/keys.sh" < /dev/null'
 
+# gh is installed here but never logged in, which is the state every fresh VM
+# is in. Registering the signing key has to skip out of that, not fail the run.
+check "register-signing-key.sh skips when gh cannot help" \
+  '"$HOME/claude-sandbox/register-signing-key.sh"'
+
 if [ "$failures" -gt 0 ]; then
   echo "  $failures check(s) failed"
   exit 1
