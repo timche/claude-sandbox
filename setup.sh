@@ -43,13 +43,19 @@ repo="$(cd "$(dirname "$source_path")" && pwd)"
 "$repo/bootstrap-system.sh"
 "$repo/install.sh"
 
+keys_failed=0
+
 # Prompts for a paste, so there has to be a terminal to prompt at.
 if [ -t 0 ]; then
-  "$repo/keys.sh"
+  "$repo/keys.sh" || keys_failed=1
 else
   echo
   echo "Skipped keys.sh — no terminal. Run $repo/keys.sh to install the SSH keys."
 fi
+
+# Last, because it is the step that turns password logins off. It skips itself
+# when there is no authorized_keys yet, rather than locking you out.
+"$repo/harden-ssh.sh"
 
 echo
 echo "Done. What is left needs a browser or a login:"
@@ -66,3 +72,5 @@ cat <<'EOF'
   - claude, then /login
   - Log out and back in so the docker group and the zsh login shell take hold.
 EOF
+
+exit "$keys_failed"
