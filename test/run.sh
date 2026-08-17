@@ -150,6 +150,16 @@ for image in "${images[@]}"; do
       echo "  FAIL  the temporary sudo grant was withdrawn"
       stage_failed=1
     fi
+
+    # The password is generated, so a run with nobody watching leaves a usable
+    # sudo behind rather than the locked account useradd creates.
+    if docker exec "$provision_container" \
+      bash -c "passwd -S $user | awk '{print \$2}' | grep -qx P"; then
+      echo "  ok    the user has a password"
+    else
+      echo "  FAIL  the user has a password"
+      stage_failed=1
+    fi
   else
     echo "  FAIL  provision.sh exited non-zero"
     stage_failed=1

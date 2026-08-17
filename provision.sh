@@ -57,28 +57,30 @@ home="$(getent passwd "$user" | cut -d: -f6)"
 # useradd leaves the account locked, so sudo has nothing to authenticate
 # against later. Group membership alone is useless without this.
 #
-# A fumbled entry should not throw away the rest of the run, so a failed
-# passwd is a warning rather than the end of it.
+# Generated rather than asked for, and printed at the end of the run: that is
+# the only copy, so a headless provision ends with a usable sudo too.
+#
+# Empty unless this run set one, which is what the closing block keys off.
+generated_password=""
+
 set_password() {
-  echo
-  passwd "$user" || {
+  # head takes a fixed count and exits on its own, so nothing in the pipeline
+  # dies of SIGPIPE and trips pipefail.
+  local candidate
+  candidate="$(head -c 18 /dev/urandom | base64)"
+
+  if printf '%s:%s\n' "$user" "$candidate" | chpasswd; then
+    generated_password="$candidate"
+  else
     echo "warning: no password set. Run 'passwd $user' before relying on sudo." >&2
-    return 0
-  }
+  fi
 }
 
 if [ "$(passwd -S "$user" | awk '{print $2}')" != P ]; then
-  if [ -t 0 ]; then
-    echo
-    echo "Set a password for $user — sudo needs one once this run finishes."
-    set_password
-  else
-    echo "warning: no terminal to set a password at. Run 'passwd $user'," >&2
-    echo "         or sudo will be unusable for $user." >&2
-  fi
+  set_password
 elif [ -t 0 ]; then
   echo
-  read -r -p "$user already has a password. Change it? [y/N] " answer
+  read -r -p "$user already has a password. Replace it with a generated one? [y/N] " answer
   if [ "$answer" = y ] || [ "$answer" = Y ]; then
     set_password
   fi
@@ -188,3 +190,27 @@ Provisioned. Before closing this session, from a second terminal:
 One more thing worth knowing: docker writes its own iptables rules and goes
 around a host firewall, so a firewall at the provider is the one that counts.
 EOF
+
+# Last, so the two things this run produced and cannot show again are the ones
+# still on screen.
+
+signing_key="$home/.ssh/git-signing.pub"
+if [ -f "$signing_key" ]; then
+  cat <<EOF
+
+Signing key, public half — register it with GitHub and in the repo's
+home/.ssh/allowed_signers, or commits signed here will not verify:
+
+$(sed 's/^/    /' "$signing_key")
+EOF
+fi
+
+if [ -n "$generated_password" ]; then
+  cat <<EOF
+
+Password for $user, generated and shown once — sudo wants it, and nothing
+else has a copy:
+
+    $generated_password
+EOF
+fi

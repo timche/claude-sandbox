@@ -45,15 +45,17 @@ clone by hand and run `~/claude-sandbox/setup.sh` directly — both work.
 
 `provision.sh` covers the one thing `setup.sh` cannot do for itself: exist as a
 user. It creates the account (`claude`, or `CLAUDE_SANDBOX_USER`), puts it in
-`sudo`, prompts for a password since `useradd` leaves the account locked and
-sudo has nothing to authenticate against otherwise, and copies root's
+`sudo`, generates a password since `useradd` leaves the account locked and sudo
+has nothing to authenticate against otherwise, and copies root's
 `authorized_keys` across so you can log back in as the new user. Nothing to
 copy and a terminal to ask at, and it prompts for a key instead, checking each
 paste with `ssh-keygen -l`. `SSH_PUBLIC_KEYS` supplies them for runs with
 nobody watching.
 
-On a re-run it asks before changing a password that is already set, the way
-`keys.sh` asks before replacing a signing key.
+The password is printed at the end of the run and stored nowhere, so a headless
+provision ends with a usable sudo too. Write it down before closing the
+session. On a re-run it asks before replacing a password that is already set,
+the way `keys.sh` asks before replacing a signing key.
 
 Then it clones the repo and runs `setup.sh` as the new user, which is where
 everything else happens. The two entry points converge there deliberately —
@@ -70,8 +72,8 @@ set would otherwise expire out of sudo's timestamp partway through.
   unattended-upgrades, docker group membership, and zsh as the login shell.
 - `install.sh` — no sudo, safe to re-run. oh-my-zsh, powerlevel10k, bun, fnm
   and node, Claude Code, herdr, the `gh-stack` extension, then the symlinks.
-- `keys.sh` — prompts for the SSH keys, which is the one credential step that
-  can be scripted. Skipped when there is no terminal to prompt at, so
+- `keys.sh` — generates the commit-signing key and prompts for the
+  `authorized_keys`. Skipped when there is no terminal to prompt at, so
   `setup.sh` stays usable from CI.
 - `harden-ssh.sh` — installs the sshd drop-in, last of all.
 
@@ -81,12 +83,16 @@ publish a package tree per release, so those repository URLs are built from
 
 ### SSH keys
 
-`keys.sh` runs as part of `setup.sh`, or on its own at any time. Paste the
-private signing key when it asks — the public half is derived with
-`ssh-keygen -y`, so there is only one thing to paste, and deriving it doubles
-as validation: a truncated paste fails before anything is written. The result
-is checked against the `allowed_signers` this repo tracks, so pasting the wrong
-key is caught here rather than surfacing later as commits that will not verify.
+`keys.sh` runs as part of `setup.sh`, or on its own at any time. It generates
+the commit-signing key with `ssh-keygen -t ed25519`, so the private half is
+born on the VM and never travels, and prints the public half at the end of the
+run. That key is new, which means two things have to happen before a signature
+from it verifies anywhere: `gh ssh-key add ~/.ssh/git-signing.pub --type
+signing`, and the same line added to `home/.ssh/allowed_signers` in this repo.
+Until then `git log --format='%G?'` reports `N`, not `G`.
+
+That is the trade for keys that stay put: `allowed_signers` becomes a list with
+one entry per machine rather than a single key you carry around.
 
 Then paste the public keys allowed to SSH in, one per line. Existing entries
 are not duplicated, and modes are set to 600 / 644 / 600.
@@ -122,7 +128,7 @@ Anything needing a browser or a login:
 | `home/.zshrc` `.p10k.zsh` `.bashrc` | `$HOME` | Shell, prompt, bun and fnm on `PATH` |
 | `home/.gitconfig` | `$HOME` | SSH-signed commits, `gh` as the credential helper |
 | `home/.config/herdr/config.toml` | `$HOME` | Toast delivery and agent panel sort |
-| `home/.ssh/allowed_signers` | `$HOME` | Public half of the signing key |
+| `home/.ssh/allowed_signers` | `$HOME` | Public halves of the signing keys |
 | `home/.terminfo/x/xterm-ghostty` | `$HOME` | Ghostty terminfo for SSH sessions |
 | `system/docker/daemon.json` | `/etc/docker/` | Binds to localhost, caps log size |
 | `system/ssh/10-hardening.conf` | `/etc/ssh/sshd_config.d/` | Keys only, no root, `AllowUsers` |
@@ -168,8 +174,9 @@ restart and `enable --now tailscaled` are the one part no container can cover.
 ## What's deliberately left out
 
 Credentials, obviously: `~/.config/gh/hosts.yml` is a `gh auth login` away, and
-the SSH keys are pasted in by `keys.sh`. `btop.conf` is left out too — it is all
-defaults, which btop rewrites on exit.
+the SSH keys are `keys.sh`'s business — the signing key generated there, the
+`authorized_keys` pasted in. `btop.conf` is left out too — it is all defaults,
+which btop rewrites on exit.
 
 Anything under `~/.claude` belongs in `claude-dotfiles`, not here.
 
