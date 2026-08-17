@@ -65,6 +65,7 @@ check "signing key path expands"    '[ "$(git config --get user.signingkey)" = "
 # System side.
 check "login shell is zsh"      'getent passwd "$USER" | cut -d: -f7 | grep -q zsh'
 check "user is in docker group" 'id -nG "$USER" | tr " " "\n" | grep -qx docker'
+check "user is in sudo group"   'id -nG "$USER" | tr " " "\n" | grep -qx sudo'
 check "docker installed"        'command -v docker'
 check "gh installed"            'command -v gh'
 check "tailscale installed"     'command -v tailscale'
@@ -87,7 +88,14 @@ if [ -s "$HOME/.ssh/authorized_keys" ]; then
     '[ -f /etc/ssh/sshd_config.d/10-hardening.conf ] && ! grep -q __USER__ /etc/ssh/sshd_config.d/10-hardening.conf'
   check "sshd drop-in disables passwords" \
     'grep -qx "PasswordAuthentication no" /etc/ssh/sshd_config.d/10-hardening.conf'
-  check "sshd accepts the drop-in" 'sudo /usr/sbin/sshd -t'
+  # Whether sshd will parse it is asserted from root in run.sh — reading the
+  # host keys needs privileges this user may no longer have.
+  check "sshd drop-in belongs to root" \
+    '[ "$(stat -c "%U %a" /etc/ssh/sshd_config.d/10-hardening.conf)" = "root 644" ]'
+  check "authorized_keys is not group or world readable" \
+    '[ "$(stat -c %a "$HOME/.ssh/authorized_keys")" = 600 ]'
+  check "authorized_keys belongs to this user" \
+    '[ "$(stat -c %U "$HOME/.ssh/authorized_keys")" = "$USER" ]'
 else
   check "no drop-in until there is a key to log in with" \
     '[ ! -f /etc/ssh/sshd_config.d/10-hardening.conf ]'

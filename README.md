@@ -136,9 +136,14 @@ here depends on the account being named `timche`.
 `test/run.sh` provisions a throwaway container per distribution, runs
 `setup.sh` in it as an unprivileged sudo user, asserts the result, then runs
 `install.sh` a second time and asserts again — the repeat is what keeps
-`install.sh` honest about being safe to re-run. Finally it seeds an
+`install.sh` honest about being safe to re-run. Then it seeds an
 `authorized_keys`, runs `harden-ssh.sh` and asserts once more, so both the
 refusal and the drop-in are covered.
+
+A second container per image covers `provision.sh` from the other end: nothing
+but root, a key handed in through `SSH_PUBLIC_KEYS`, and the same assertions
+against the user it creates. That one clones rather than copying, so it sees
+the last commit and not the working tree — `run.sh` says so when they differ.
 
 ```sh
 test/run.sh                  # debian:13 and ubuntu:24.04

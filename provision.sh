@@ -143,20 +143,25 @@ fi
 
 # setup.sh sudos its way through a long apt run as $user, and the password just
 # set would expire out of sudo's timestamp partway through. Lift the
-# requirement for the length of this run only.
+# requirement for the length of this run only — the trap goes on first, so a
+# rejected sudoers file cannot leave a standing grant behind.
+trap 'rm -f "$staged" "$staged.one" "$sudoers_drop_in"' EXIT
+
 cat >"$sudoers_drop_in" <<EOF
 $user ALL=(ALL) NOPASSWD:ALL
 EOF
 chmod 0440 "$sudoers_drop_in"
 visudo -cf "$sudoers_drop_in" >/dev/null
-trap 'rm -f "$staged" "$staged.one" "$sudoers_drop_in"' EXIT
 
-# stdin may be the curl pipe feeding this script, so hand setup.sh the real
-# terminal — its key prompts have nowhere to go otherwise.
+# bootstrap-system.sh makes zsh the login shell, so a second run would hand
+# setup.sh to a shell whose rc files expect a terminal. -s keeps it bash.
+#
+# stdin may also be the curl pipe feeding this script, so pass the real
+# terminal along — setup.sh's key prompts have nowhere to go otherwise.
 if (exec </dev/tty) 2>/dev/null; then
-  su - "$user" -c "$target/setup.sh" </dev/tty
+  su - "$user" -s /bin/bash -c "$target/setup.sh" </dev/tty
 else
-  su - "$user" -c "$target/setup.sh"
+  su - "$user" -s /bin/bash -c "$target/setup.sh"
 fi
 
 cat <<EOF
