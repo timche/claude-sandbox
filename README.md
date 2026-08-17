@@ -17,10 +17,17 @@ asserting exactly that.
 
 ## Usage
 
-On a fresh Debian or Ubuntu VM, one command:
+On a VM that already has your account, as that account:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/timche/claude-sandbox/main/setup.sh | bash
+```
+
+On one that arrived as root and nothing else — a netcup or hetzner box, say —
+as root:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/timche/claude-sandbox/main/provision.sh | bash
 ```
 
 No authentication needed — this repo is public. Piped in like that, `setup.sh`
@@ -33,6 +40,28 @@ repo, so it has to stay on disk. `~/claude-sandbox` is where it lives, or set
 
 If the image has no `curl` either, `sudo apt-get install -y curl` first, or
 clone by hand and run `~/claude-sandbox/setup.sh` directly — both work.
+
+### From root
+
+`provision.sh` covers the one thing `setup.sh` cannot do for itself: exist as a
+user. It creates the account (`claude`, or `CLAUDE_SANDBOX_USER`), puts it in
+`sudo`, prompts for a password since `useradd` leaves the account locked and
+sudo has nothing to authenticate against otherwise, and copies root's
+`authorized_keys` across so you can log back in as the new user. Nothing to
+copy and a terminal to ask at, and it prompts for a key instead, checking each
+paste with `ssh-keygen -l`. `SSH_PUBLIC_KEYS` supplies them for runs with
+nobody watching.
+
+On a re-run it asks before changing a password that is already set, the way
+`keys.sh` asks before replacing a signing key.
+
+Then it clones the repo and runs `setup.sh` as the new user, which is where
+everything else happens. The two entry points converge there deliberately —
+`provision.sh` stops at the user boundary.
+
+For the length of that run only, the user gets a `NOPASSWD` sudoers drop-in,
+removed on exit: `setup.sh` sudos through a long apt run, and the password just
+set would otherwise expire out of sudo's timestamp partway through.
 
 `setup.sh` runs the halves in order:
 
@@ -103,16 +132,21 @@ Anything needing a browser or a login:
 
 Paths use `$HOME` rather than a hardcoded home directory, and the sshd
 drop-in's `__USER__` placeholder is substituted at install time, so nothing
-here depends on the account being named `timche`.
+here depends on the account being named `claude`.
 
 ## Tests
 
 `test/run.sh` provisions a throwaway container per distribution, runs
 `setup.sh` in it as an unprivileged sudo user, asserts the result, then runs
 `install.sh` a second time and asserts again — the repeat is what keeps
-`install.sh` honest about being safe to re-run. Finally it seeds an
+`install.sh` honest about being safe to re-run. Then it seeds an
 `authorized_keys`, runs `harden-ssh.sh` and asserts once more, so both the
 refusal and the drop-in are covered.
+
+A second container per image covers `provision.sh` from the other end: nothing
+but root, a key handed in through `SSH_PUBLIC_KEYS`, and the same assertions
+against the user it creates. That one clones rather than copying, so it sees
+the last commit and not the working tree — `run.sh` says so when they differ.
 
 ```sh
 test/run.sh                  # debian:13 and ubuntu:24.04

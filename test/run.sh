@@ -30,6 +30,24 @@ run_in_container() {
     -e DEBIAN_FRONTEND=noninteractive "$1" bash "/home/$user/claude-sandbox/$2"
 }
 
+start_container() {
+  docker rm -f "$1" >/dev/null 2>&1
+  docker run -d --name "$1" -v "$repo:/repo:ro" "$2" sleep 7200 >/dev/null
+}
+
+# provision.sh clones rather than copying, so its half of the suite sees the
+# last commit and not the working tree.
+if [ -n "$(git -C "$repo" status --porcelain)" ]; then
+  echo "note: uncommitted changes — the provision.sh stage tests HEAD without them"
+fi
+
+# A key for provision.sh to authorize. The private half goes out with the
+# temporary directory; nothing is meant to log in with it.
+keydir="$(mktemp -d)"
+trap 'rm -rf "$keydir"' EXIT
+ssh-keygen -q -t ed25519 -N '' -C provision-test -f "$keydir/key"
+public_key="$(cat "$keydir/key.pub")"
+
 failed=0
 
 for image in "${images[@]}"; do
@@ -37,16 +55,15 @@ for image in "${images[@]}"; do
   log="$(mktemp)"
 
   echo "==> $image"
-  docker rm -f "$container" >/dev/null 2>&1
 
-  docker run -d --name "$container" -v "$repo:/repo:ro" "$image" sleep 7200 >/dev/null
+  start_container "$container" "$image"
 
   # A fresh VM has a sudo-capable non-root user; the base images do not.
   docker exec -e DEBIAN_FRONTEND=noninteractive "$container" bash -c "
     set -e
     apt-get update -qq
     apt-get install -y -qq sudo passwd adduser >/dev/null
-    useradd -m -s /bin/bash $user
+    useradd -m -s /bin/bash -G sudo $user
     echo '$user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$user
     cp -r /repo /home/$user/claude-sandbox
     chown -R $user:$user /home/$user/claude-sandbox
@@ -91,6 +108,53 @@ for image in "${images[@]}"; do
     fi
   fi
 
+  # The other entry point, from the other end: a bare image with nothing but
+  # root, where the user setup.sh needs does not exist yet. A key is handed in
+  # the way a headless run would, so hardening happens on the way through.
+  echo "--- provision.sh"
+  provision_container="$container-provision"
+  start_container "$provision_container" "$image"
+
+  # git refuses to clone from a directory owned by someone else, and the
+  # mounted repo belongs to whoever checked it out — uid 1000 on a dev box,
+  # someone else on a CI runner. The container is thrown away either way.
+  docker exec -e DEBIAN_FRONTEND=noninteractive "$provision_container" bash -c "
+    set -e
+    apt-get update -qq
+    apt-get install -y -qq git >/dev/null
+    git config --system --add safe.directory '*'
+  " >>"$log" 2>&1
+
+  if docker exec \
+    -e DEBIAN_FRONTEND=noninteractive \
+    -e CLAUDE_SANDBOX_USER="$user" \
+    -e CLAUDE_SANDBOX_REPO=/repo \
+    -e SSH_PUBLIC_KEYS="$public_key" \
+    "$provision_container" bash /repo/provision.sh >>"$log" 2>&1; then
+    run_in_container "$provision_container" test/assert.sh || stage_failed=1
+
+    # Two things only root can see: that sshd will parse what was installed,
+    # and that the sudo grant provision.sh lends itself for the run is gone
+    # again. Left behind, that grant would be a standing one.
+    if docker exec "$provision_container" /usr/sbin/sshd -t >>"$log" 2>&1; then
+      echo "  ok    sshd accepts the drop-in"
+    else
+      echo "  FAIL  sshd accepts the drop-in"
+      stage_failed=1
+    fi
+
+    if docker exec "$provision_container" \
+      test ! -f /etc/sudoers.d/90-claude-sandbox-provision; then
+      echo "  ok    the temporary sudo grant was withdrawn"
+    else
+      echo "  FAIL  the temporary sudo grant was withdrawn"
+      stage_failed=1
+    fi
+  else
+    echo "  FAIL  provision.sh exited non-zero"
+    stage_failed=1
+  fi
+
   if [ "$stage_failed" -ne 0 ]; then
     failed=1
     echo "--- last 40 lines of output"
@@ -101,9 +165,9 @@ for image in "${images[@]}"; do
   fi
 
   if [ "${KEEP:-}" = 1 ]; then
-    echo "  container kept: $container"
+    echo "  containers kept: $container $provision_container"
   else
-    docker rm -f "$container" >/dev/null 2>&1
+    docker rm -f "$container" "$provision_container" >/dev/null 2>&1
   fi
 done
 
