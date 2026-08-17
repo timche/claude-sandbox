@@ -17,10 +17,17 @@ asserting exactly that.
 
 ## Usage
 
-On a fresh Debian or Ubuntu VM, one command:
+On a VM that already has your account, as that account:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/timche/claude-sandbox/main/setup.sh | bash
+```
+
+On one that arrived as root and nothing else — a netcup or hetzner box, say —
+as root:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/timche/claude-sandbox/main/provision.sh | bash
 ```
 
 No authentication needed — this repo is public. Piped in like that, `setup.sh`
@@ -33,6 +40,25 @@ repo, so it has to stay on disk. `~/claude-sandbox` is where it lives, or set
 
 If the image has no `curl` either, `sudo apt-get install -y curl` first, or
 clone by hand and run `~/claude-sandbox/setup.sh` directly — both work.
+
+### From root
+
+`provision.sh` covers the one thing `setup.sh` cannot do for itself: exist as a
+user. It creates the account (`timche`, or `CLAUDE_SANDBOX_USER`), puts it in
+`sudo`, prompts for a password since `useradd` leaves the account locked and
+sudo has nothing to authenticate against otherwise, and copies root's
+`authorized_keys` across so you can log back in as the new user. Nothing to
+copy and a terminal to ask at, and it prompts for a key instead, checking each
+paste with `ssh-keygen -l`. `SSH_PUBLIC_KEYS` supplies them for runs with
+nobody watching.
+
+Then it clones the repo and runs `setup.sh` as the new user, which is where
+everything else happens. The two entry points converge there deliberately —
+`provision.sh` stops at the user boundary.
+
+For the length of that run only, the user gets a `NOPASSWD` sudoers drop-in,
+removed on exit: `setup.sh` sudos through a long apt run, and the password just
+set would otherwise expire out of sudo's timestamp partway through.
 
 `setup.sh` runs the halves in order:
 
