@@ -11,13 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    strategy:
-      fail-fast: false
-      matrix:
-        image: [debian:13, ubuntu:24.04]
-
     steps:
       - uses: actions/checkout@v7
 
-      - name: Run setup.sh in a ${{ matrix.image }} container
-        run: test/run.sh ${{ matrix.image }}
+      - name: Run setup.sh in a debian:13 container
+        run: test/run.sh debian:13

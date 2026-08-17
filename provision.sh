@@ -32,13 +32,10 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 distro="$(. /etc/os-release && echo "$ID")"
-case "$distro" in
-  debian | ubuntu) ;;
-  *)
-    echo "unsupported distribution: $distro (expected debian or ubuntu)" >&2
-    exit 1
-    ;;
-esac
+if [ "$distro" != debian ]; then
+  echo "unsupported distribution: $distro (expected debian)" >&2
+  exit 1
+fi
 
 # Enough to create the user and clone the repo. bootstrap-system.sh, running
 # later as the user, is what installs the rest.

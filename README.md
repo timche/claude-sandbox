@@ -2,7 +2,7 @@
 
 [![test](https://github.com/timche/claude-sandbox/actions/workflows/test.yml/badge.svg)](https://github.com/timche/claude-sandbox/actions/workflows/test.yml)
 
-> Setup for `claude`, a Debian or Ubuntu sandbox VM dedicated to running Claude Code
+> Setup for `claude`, a Debian sandbox VM dedicated to running Claude Code
 
 The VM exists to run Claude Code and nothing else, which is why the machine
 runs it with `bypassPermissions` — there is nothing on it worth guarding
@@ -75,12 +75,9 @@ set would otherwise expire out of sudo's timestamp partway through.
   `setup.sh` stays usable from CI.
 - `harden-ssh.sh` — installs the sshd drop-in, last of all.
 
-Both distributions are supported from the same scripts. Docker and tailscale
-publish separate package trees, so the repository URLs are built from `ID` and
-`VERSION_CODENAME` in `/etc/os-release`; anything other than `debian` or
-`ubuntu` is refused up front. On Ubuntu, `universe` is enabled first when
-missing, since `btop` lives there. Verified end to end on `debian:13` and
-`ubuntu:24.04`.
+Debian only, and anything else is refused up front. Docker and tailscale
+publish a package tree per release, so those repository URLs are built from
+`VERSION_CODENAME` in `/etc/os-release`. Verified end to end on `debian:13`.
 
 ### SSH keys
 
@@ -136,7 +133,7 @@ here depends on the account being named `claude`.
 
 ## Tests
 
-`test/run.sh` provisions a throwaway container per distribution, runs
+`test/run.sh` provisions a throwaway container per image, runs
 `setup.sh` in it as an unprivileged sudo user, asserts the result, then runs
 `install.sh` a second time and asserts again — the repeat is what keeps
 `install.sh` honest about being safe to re-run. Then it seeds an
@@ -149,8 +146,8 @@ against the user it creates. That one clones rather than copying, so it sees
 the last commit and not the working tree — `run.sh` says so when they differ.
 
 ```sh
-test/run.sh                  # debian:13 and ubuntu:24.04
-test/run.sh ubuntu:22.04     # one image
+test/run.sh                  # debian:13
+test/run.sh debian:12        # another release
 KEEP=1 test/run.sh           # leave the containers up to poke at
 ```
 
@@ -163,7 +160,7 @@ the expectation is not met. Prefer assertions that would catch a real
 regression: that an interactive shell resolves `node`, not merely that a file
 exists.
 
-The same two images run in CI on every push and pull request
+The same image runs in CI on every push and pull request
 (`.github/workflows/test.yml`). Service management is skipped where
 `/run/systemd/system` is absent, so `systemctl restart docker`, the `ssh`
 restart and `enable --now tailscaled` are the one part no container can cover.
