@@ -116,12 +116,13 @@ for image in "${images[@]}"; do
   start_container "$provision_container" "$image"
 
   # git refuses to clone from a directory owned by someone else, and the
-  # mounted repo belongs to whoever checked it out.
+  # mounted repo belongs to whoever checked it out — uid 1000 on a dev box,
+  # someone else on a CI runner. The container is thrown away either way.
   docker exec -e DEBIAN_FRONTEND=noninteractive "$provision_container" bash -c "
     set -e
     apt-get update -qq
     apt-get install -y -qq git >/dev/null
-    git config --system --add safe.directory /repo
+    git config --system --add safe.directory '*'
   " >>"$log" 2>&1
 
   if docker exec \
