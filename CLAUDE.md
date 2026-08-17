@@ -52,7 +52,7 @@ Two entry points converge on `setup.sh`:
   in which case it clones first and re-execs the copy inside. Calls the halves
   in order: `bootstrap-system.sh` (sudo, system packages, docker/gh/tailscale
   repos, login shell), `install.sh` (no sudo, user tooling and the symlinks),
-  `keys.sh`, `harden-ssh.sh`.
+  `keys.sh`, `harden-ssh.sh`, `login.sh`.
 
 `home/` mirrors `$HOME` and `system/` mirrors `/etc`. `install.sh` symlinks out
 of `home/`, so the clone has to stay on disk — it is not a scratch copy.
@@ -63,10 +63,15 @@ of `home/`, so the clone has to stay on disk — it is not a scratch copy.
   refuses when the target user has no `authorized_keys`, since hardening a
   fresh VM before a key exists leaves it reachable only from the provider's
   console. `FORCE_HARDEN=true` overrides.
-- `keys.sh` and the interactive prompts in `provision.sh` are gated on
-  `[ -t 0 ]`. Without a terminal they skip rather than block, which is what
-  keeps `setup.sh` usable from CI. If `keys.sh` ever stops bailing out
-  headlessly, the suite hangs instead of failing.
+- `keys.sh`, `login.sh` and the interactive prompts in `provision.sh` are gated
+  on `[ -t 0 ]`. Without a terminal they skip rather than block, which is what
+  keeps `setup.sh` usable from CI. If either script ever stops bailing out
+  headlessly, the suite hangs instead of failing — `assert.sh` runs `login.sh`
+  under `timeout` for exactly that reason.
+- `login.sh` runs after `harden-ssh.sh` and ends by rerunning `install.sh`,
+  which is the only way the gh-authenticated half of that script (gh-stack, the
+  signing key, `claude-dotfiles`) gets reached on a fresh VM. Nothing in the
+  test suite covers it: `gh` is never logged in inside a container.
 - `provision.sh` lends the user a `NOPASSWD` sudoers drop-in for the length of
   the run only, removed by an EXIT trap, because the fresh password would
   otherwise expire out of sudo's timestamp partway through a long apt run.
@@ -89,7 +94,9 @@ repository URLs are built from `VERSION_CODENAME` in `/etc/os-release`.
 
 **Nothing under `~/.claude` ships from this repo.** It is public; the Claude
 Code configuration lives in the private `claude-dotfiles` repo, and
-`assert.sh` fails if `home/.claude` appears here.
+`assert.sh` fails if `home/.claude` appears here. `install.sh` clones that repo
+and runs its `install.sh`, but only with an authenticated `gh` — and a clone
+that fails is a message, since nobody but the owner can read it.
 
 ## Credentials
 
@@ -117,5 +124,5 @@ earlier in the same run.
 ## Environment knobs
 
 `CLAUDE_SANDBOX_USER`, `CLAUDE_SANDBOX_REPO`, `CLAUDE_SANDBOX_DIR`,
-`SSH_PUBLIC_KEYS` (headless key handoff to `provision.sh`), `FORCE_HARDEN`,
-`KEEP`.
+`CLAUDE_DOTFILES_REPO`, `CLAUDE_DOTFILES_DIR`, `SSH_PUBLIC_KEYS` (headless key
+handoff to `provision.sh`), `FORCE_HARDEN`, `KEEP`.

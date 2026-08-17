@@ -53,24 +53,35 @@ else
   echo "Skipped keys.sh — no terminal. Run $repo/keys.sh to install the SSH keys."
 fi
 
-# Last, because it is the step that turns password logins off. It skips itself
-# when there is no authorized_keys yet, rather than locking you out.
+# Last of the steps that change the machine, because it is the one that turns
+# password logins off. It skips itself when there is no authorized_keys yet,
+# rather than locking you out.
 "$repo/harden-ssh.sh"
 
+# Then the logins, which change nothing here but need a browser somewhere else.
+# It reruns install.sh itself for the half that was waiting on gh.
+if [ -t 0 ]; then
+  "$repo/login.sh"
+else
+  echo
+  echo "Skipped login.sh — no terminal. Run $repo/login.sh to log in to GitHub"
+  echo "and tailscale, and to finish the parts that need an account."
+fi
+
 echo
-echo "Done. What is left needs a browser or a login:"
+echo "Done. What is left:"
 echo
 
-# This repo clones without authentication, so gh usually is not logged in yet —
-# but it will be if you came back here after fetching claude-dotfiles.
+# Still not logged in means login.sh was skipped or did not finish, and with it
+# the gh-stack extension, the signing key and ~/.claude.
 if ! gh auth status >/dev/null 2>&1; then
-  echo "  - gh auth login, then rerun install.sh for the gh-stack extension and to"
-  echo "    register the signing key. That needs a scope gh does not ask for:"
-  echo "    gh auth refresh -h github.com -s write:ssh_signing_key"
+  echo "  - $repo/login.sh — GitHub and tailscale, then it reruns install.sh for"
+  echo "    the gh-stack extension, the signing key and the private dotfiles."
+elif ! tailscale status >/dev/null 2>&1; then
+  echo "  - sudo tailscale up — $repo/login.sh tried and did not get there."
 fi
 
 cat <<'EOF'
-  - sudo tailscale up
   - claude, then /login
   - Log out and back in so the docker group and the zsh login shell take hold.
 EOF

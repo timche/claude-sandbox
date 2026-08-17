@@ -72,11 +72,17 @@ set would otherwise expire out of sudo's timestamp partway through.
   unattended-upgrades, docker group membership, and zsh as the login shell.
 - `install.sh` — no sudo, safe to re-run. oh-my-zsh, powerlevel10k, bun, fnm
   and node, Claude Code, herdr, the `gh-stack` extension, the signing key's
-  registration with GitHub, then the symlinks.
+  registration with GitHub, the private `claude-dotfiles` repo, then the
+  symlinks. Everything from `gh-stack` on needs an authenticated `gh` and is
+  skipped without one.
 - `keys.sh` — prompts for the commit-signing key and the `authorized_keys`.
   Skipped when there is no terminal to prompt at, so `setup.sh` stays usable
   from CI.
-- `harden-ssh.sh` — installs the sshd drop-in, last of all.
+- `harden-ssh.sh` — installs the sshd drop-in, last of the steps that change
+  the machine.
+- `login.sh` — `gh auth login` and `sudo tailscale up`, then `install.sh` again
+  for the half that was waiting on the login. Skipped without a terminal, same
+  as `keys.sh`.
 
 `register-signing-key.sh` is called by the two above rather than by `setup.sh`,
 and runs on its own too.
@@ -108,17 +114,17 @@ GitHub is the other half, and `register-signing-key.sh` does it once `gh` can.
 Both `install.sh` and `keys.sh` call it, and it is runnable on its own:
 
 ```sh
-gh auth login
 gh auth refresh -h github.com -s write:ssh_signing_key
 ~/claude-sandbox/register-signing-key.sh
 ```
 
 That scope is separate from `admin:public_key` — GitHub keeps signing keys and
-authentication keys in different collections, and `gh auth login` asks for
-neither. Everything that stops the script is a skip rather than a failure, and
-it says which one: no key, no `gh`, not logged in, or no scope. So the first
-run of a fresh VM always skips it, which is why rerunning `install.sh` after
-logging in is the documented step.
+authentication keys in different collections, and the interactive `gh auth
+login` asks for neither, which is why `login.sh` passes it explicitly and the
+refresh above is only for a login made some other way. Everything that stops
+the script is a skip rather than a failure, and it says which one: no key, no
+`gh`, not logged in, or no scope. So the first pass of a fresh VM always skips
+it, and the `install.sh` rerun at the end of `login.sh` is what picks it up.
 
 The key is added under the machine's hostname, and a key already on the
 account is left alone. Until it lands, GitHub shows the commits unverified even
@@ -142,13 +148,20 @@ defaulting to whoever runs it.
 
 ### What stays manual
 
-Anything needing a browser or a login:
+`login.sh` runs at the end of `setup.sh` and drives the two account logins for
+you: `gh auth login` with the signing-key scope already requested, then
+`sudo tailscale up`. Both print a code and a URL to open on whichever machine
+has a browser — this one has none. Then it reruns `install.sh`, which is what
+finally installs `gh-stack`, registers the signing key and fetches
+`claude-dotfiles`.
 
-1. `gh auth login` — add `-s write:ssh_signing_key` so the signing key can be
-   registered — then rerun `install.sh` for that and the `gh-stack` extension.
-2. `sudo tailscale up`
-3. `claude`, then `/login`
-4. Log out and back in for the docker group and login shell.
+That leaves two:
+
+1. `claude`, then `/login`
+2. Log out and back in for the docker group and login shell.
+
+`login.sh` is also the script to rerun on its own if a login was skipped or has
+since expired.
 
 ## Layout
 
@@ -212,13 +225,18 @@ Anything under `~/.claude` belongs in `claude-dotfiles`, not here.
 
 ## The private half
 
-Once this repo has finished, fetch the Claude Code configuration:
+The Claude Code configuration is fetched by `install.sh` once `gh` is logged
+in, which in a normal run means the pass `login.sh` makes at the end. By hand
+it is:
 
 ```sh
-gh auth login
 gh repo clone claude-dotfiles ~/claude-dotfiles
 ~/claude-dotfiles/install.sh
 ```
+
+Being private is the whole reason it cannot happen earlier. `CLAUDE_DOTFILES_REPO`
+and `CLAUDE_DOTFILES_DIR` move it elsewhere, and a clone that fails — which is
+what it does for anyone who is not its owner — is a message, not a failed run.
 
 That repo links `CLAUDE.md`, `settings.json`, `skills/` and per-project memory
 into `~/.claude`, and carries the `PostToolUse` hook that keeps memory synced

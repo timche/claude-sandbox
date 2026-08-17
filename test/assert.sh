@@ -107,6 +107,12 @@ fi
 check "keys.sh exits without a terminal" \
   '"$HOME/claude-sandbox/keys.sh" < /dev/null'
 
+# Same again for login.sh, which drives two browser flows and would sit on the
+# gh prompt forever. timeout, because the failure mode is a hang and not an
+# exit status.
+check "login.sh exits without a terminal" \
+  'timeout 30 "$HOME/claude-sandbox/login.sh" < /dev/null'
+
 # gh is installed here but never logged in, which is the state every fresh VM
 # is in. Registering the signing key has to skip out of that, not fail the run.
 check "register-signing-key.sh skips when gh cannot help" \
