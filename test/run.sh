@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Run setup.sh end to end in a throwaway container per image, then assert the
-# result. Defaults to the distributions the repo claims to support.
+# result. Defaults to the release the repo claims to support.
 #
-#   test/run.sh                  # debian:13 and ubuntu:24.04
-#   test/run.sh ubuntu:22.04     # one image
+#   test/run.sh                  # debian:13
+#   test/run.sh debian:12        # another release
 #   KEEP=1 test/run.sh           # leave the containers around to poke at
 #
 # Nothing here touches the machine it runs on; every change lands in the
@@ -17,7 +17,7 @@ user=tester
 
 images=("$@")
 if [ ${#images[@]} -eq 0 ]; then
-  images=(debian:13 ubuntu:24.04)
+  images=(debian:13)
 fi
 
 if ! docker info >/dev/null 2>&1; then

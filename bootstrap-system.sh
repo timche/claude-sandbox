@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# System setup for a bare Debian or Ubuntu VM: packages, docker, tailscale.
-# Needs sudo, and only has to run once.
+# System setup for a bare Debian VM: packages, docker, tailscale. Needs sudo,
+# and only has to run once.
 #
 # The sshd drop-in is not installed here — see harden-ssh.sh, which setup.sh
 # runs once there are keys to log in with.
@@ -16,19 +16,9 @@ distro="$(. /etc/os-release && echo "$ID")"
 codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
 architecture="$(dpkg --print-architecture)"
 
-case "$distro" in
-  debian | ubuntu) ;;
-  *)
-    echo "unsupported distribution: $distro (expected debian or ubuntu)" >&2
-    exit 1
-    ;;
-esac
-
-# btop lives in universe on Ubuntu, which minimal images leave off.
-if [ "$distro" = ubuntu ] && ! grep -qr universe /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null; then
-  sudo apt-get update
-  sudo apt-get install -y software-properties-common
-  sudo add-apt-repository -y universe
+if [ "$distro" != debian ]; then
+  echo "unsupported distribution: $distro (expected debian)" >&2
+  exit 1
 fi
 
 # unzip is what bun's installer extracts with, jq is what the settings.json
@@ -46,16 +36,16 @@ APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 EOF
 
-# Third-party repositories. Docker and tailscale publish per-distribution
-# trees; the github-cli one is shared.
+# Third-party repositories. Docker and tailscale publish a tree per release,
+# so these are keyed on the codename; the github-cli one is not.
 
 sudo install -d -m 0755 /etc/apt/keyrings
 
-sudo curl -fsSL "https://download.docker.com/linux/$distro/gpg" -o /etc/apt/keyrings/docker.asc
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 sudo chmod a+r /etc/apt/keyrings/docker.asc
 sudo tee /etc/apt/sources.list.d/docker.sources >/dev/null <<EOF
 Types: deb
-URIs: https://download.docker.com/linux/$distro
+URIs: https://download.docker.com/linux/debian
 Suites: $codename
 Components: stable
 Architectures: $architecture
@@ -68,9 +58,9 @@ sudo chmod a+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=$architecture signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
   | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
 
-sudo curl -fsSL "https://pkgs.tailscale.com/stable/$distro/$codename.noarmor.gpg" \
+sudo curl -fsSL "https://pkgs.tailscale.com/stable/debian/$codename.noarmor.gpg" \
   -o /usr/share/keyrings/tailscale-archive-keyring.gpg
-sudo curl -fsSL "https://pkgs.tailscale.com/stable/$distro/$codename.tailscale-keyring.list" \
+sudo curl -fsSL "https://pkgs.tailscale.com/stable/debian/$codename.tailscale-keyring.list" \
   -o /etc/apt/sources.list.d/tailscale.list
 
 sudo apt-get update
