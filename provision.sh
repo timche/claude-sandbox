@@ -16,7 +16,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-user="${CLAUDE_SANDBOX_USER:-timche}"
+user="${CLAUDE_SANDBOX_USER:-claude}"
 repo_url="${CLAUDE_SANDBOX_REPO:-https://github.com/timche/claude-sandbox.git}"
 
 # Extra keys to authorize, one per line, for runs with nobody at the keyboard.
@@ -59,14 +59,31 @@ home="$(getent passwd "$user" | cut -d: -f6)"
 
 # useradd leaves the account locked, so sudo has nothing to authenticate
 # against later. Group membership alone is useless without this.
-if [ "$(passwd -S "$user" | awk '{print $2}')" != "P" ]; then
+#
+# A fumbled entry should not throw away the rest of the run, so a failed
+# passwd is a warning rather than the end of it.
+set_password() {
+  echo
+  passwd "$user" || {
+    echo "warning: no password set. Run 'passwd $user' before relying on sudo." >&2
+    return 0
+  }
+}
+
+if [ "$(passwd -S "$user" | awk '{print $2}')" != P ]; then
   if [ -t 0 ]; then
     echo
-    echo "Set a password for $user — sudo needs one after this run finishes."
-    passwd "$user"
+    echo "Set a password for $user — sudo needs one once this run finishes."
+    set_password
   else
     echo "warning: no terminal to set a password at. Run 'passwd $user'," >&2
     echo "         or sudo will be unusable for $user." >&2
+  fi
+elif [ -t 0 ]; then
+  echo
+  read -r -p "$user already has a password. Change it? [y/N] " answer
+  if [ "$answer" = y ] || [ "$answer" = Y ]; then
+    set_password
   fi
 fi
 

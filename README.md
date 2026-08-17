@@ -44,13 +44,16 @@ clone by hand and run `~/claude-sandbox/setup.sh` directly — both work.
 ### From root
 
 `provision.sh` covers the one thing `setup.sh` cannot do for itself: exist as a
-user. It creates the account (`timche`, or `CLAUDE_SANDBOX_USER`), puts it in
+user. It creates the account (`claude`, or `CLAUDE_SANDBOX_USER`), puts it in
 `sudo`, prompts for a password since `useradd` leaves the account locked and
 sudo has nothing to authenticate against otherwise, and copies root's
 `authorized_keys` across so you can log back in as the new user. Nothing to
 copy and a terminal to ask at, and it prompts for a key instead, checking each
 paste with `ssh-keygen -l`. `SSH_PUBLIC_KEYS` supplies them for runs with
 nobody watching.
+
+On a re-run it asks before changing a password that is already set, the way
+`keys.sh` asks before replacing a signing key.
 
 Then it clones the repo and runs `setup.sh` as the new user, which is where
 everything else happens. The two entry points converge there deliberately —
@@ -129,7 +132,7 @@ Anything needing a browser or a login:
 
 Paths use `$HOME` rather than a hardcoded home directory, and the sshd
 drop-in's `__USER__` placeholder is substituted at install time, so nothing
-here depends on the account being named `timche`.
+here depends on the account being named `claude`.
 
 ## Tests
 
