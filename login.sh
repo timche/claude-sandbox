@@ -49,19 +49,32 @@ fi
 
 # tailscale
 
+# --ssh has tailscaled answer SSH on the tailnet itself. That is a second way
+# in, one that survives losing the key sshd wants or the provider's firewall
+# closing over port 22 — and it is why harden-ssh.sh can be as strict as it is.
+#
+# Advertising is all this does. Nothing connects until the tailnet policy has
+# an ssh rule for the machine, which is a console job; and that policy, not
+# 10-hardening.conf, is what governs the tailscale path, since sshd never sees
+# it. setup.sh says so at the end of the run.
 if [ ! -d /run/systemd/system ]; then
   echo "no init to run tailscaled under — skipping tailscale"
 elif tailscale status >/dev/null 2>&1; then
   echo "tailscale is already up"
+
+  # It may well be up from before this script advertised SSH. set is how you
+  # turn it on afterwards without taking the machine off the tailnet first.
+  sudo tailscale set --ssh ||
+    echo "could not advertise ssh — run 'sudo tailscale set --ssh'" >&2
 else
   cat <<'EOF'
 
-Bringing tailscale up. Same again: it prints a URL to authenticate the machine
-with.
+Bringing tailscale up, advertising SSH. Same again: it prints a URL to
+authenticate the machine with.
 
 EOF
 
-  sudo tailscale up ||
+  sudo tailscale up --ssh ||
     echo "tailscale up did not finish — rerun $repo/login.sh to try again" >&2
 fi
 

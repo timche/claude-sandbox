@@ -65,4 +65,15 @@ cat <<'EOF'
   - Log out and back in so the docker group and the zsh login shell take hold.
 EOF
 
+# login.sh advertises tailscale ssh, and that is as far as a machine can take
+# it: who may use it is tailnet policy, and tailscaled answers those sessions
+# itself, so nothing in the sshd drop-in applies to them.
+if tailscale status >/dev/null 2>&1; then
+  cat <<'EOF'
+  - Add an ssh rule for this machine in the tailscale admin console. It
+    advertises ssh but nobody can use it until the policy allows it — and that
+    policy is what governs the tailscale way in, not the sshd hardening.
+EOF
+fi
+
 exit "$keys_failed"
