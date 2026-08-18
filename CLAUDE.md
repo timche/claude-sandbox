@@ -14,6 +14,11 @@ come from the private `claude-dotfiles`, which `install.sh` clones once `gh` is
 logged in. The split is *works before you can authenticate* against *needs an
 account*.
 
+## Committing
+
+Commit and push to main directly, no branch and no PR. Standing permission, and
+an exception to the global rules on branching and asking before a push.
+
 ## Rules
 
 - Nothing may depend on the account being named `claude`: paths go through
