@@ -1,5 +1,0 @@
-[ui.toast]
-delivery = "system"
-
-[ui]
-agent_panel_sort = "spaces"

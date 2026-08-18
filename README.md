@@ -8,12 +8,14 @@ The VM exists to run Claude Code and nothing else, which is why the machine
 runs it with `bypassPermissions` — there is nothing on it worth guarding
 Claude from.
 
-Everything here is machine setup and safe to publish. The Claude Code
-configuration — instructions, skills, and per-project memory — lives in a
-private companion repo, `claude-dotfiles`, because the memory files describe
-infrastructure on private projects. Splitting on the `~/.claude` boundary means
-no memory path can end up in this repo by construction, and there is a test
-asserting exactly that.
+Everything here is machine setup and safe to publish: packages, docker, sshd,
+the account. Everything personal — the shell, the prompt, the runtimes, and all
+of `~/.claude` — lives in a private companion repo, `claude-dotfiles`, which
+this one clones as soon as `gh` is logged in.
+
+The line between them is *works before you can authenticate* against *needs an
+account*, and it means this repo exposes nothing but the shape of the machine.
+A test asserts no personal path can appear here.
 
 ## Usage
 
@@ -34,9 +36,10 @@ No authentication needed — this repo is public. Piped in like that, `setup.sh`
 installs `git` if the image lacks it, clones the repo to `~/claude-sandbox`,
 and hands over to the copy inside it. Re-running pulls and goes again.
 
-The clone isn't a formality: `install.sh` symlinks your dotfiles out of the
-repo, so it has to stay on disk. `~/claude-sandbox` is where it lives, or set
-`CLAUDE_SANDBOX_DIR` to put it elsewhere.
+Nothing symlinks out of this clone, so it is disposable once the run is done —
+`harden-ssh.sh` is the only script that still reads a file from it. It lives at
+`~/claude-sandbox`, or set `CLAUDE_SANDBOX_DIR` to put it elsewhere. The
+private clone is the one that has to stay on disk.
 
 If the image has no `curl` either, `sudo apt-get install -y curl` first, or
 clone by hand and run `~/claude-sandbox/setup.sh` directly — both work.
@@ -69,23 +72,21 @@ set would otherwise expire out of sudo's timestamp partway through.
 
 - `bootstrap-system.sh` — needs sudo, run once. apt upgrade and packages, the
   docker, github-cli and tailscale repositories, `/etc/docker/daemon.json`,
-  unattended-upgrades, docker group membership, and zsh as the login shell.
-- `install.sh` — no sudo, safe to re-run. oh-my-zsh, powerlevel10k, bun, fnm
-  and node, Claude Code, herdr, the `gh-stack` extension, the signing key's
-  registration with GitHub, the private `claude-dotfiles` repo, then the
-  symlinks. Everything from `gh-stack` on needs an authenticated `gh` and is
-  skipped without one.
+  unattended-upgrades, docker group membership, zsh as the login shell, and the
+  fallback rc files that make that shell usable until the real ones arrive.
+- `install.sh` — clones `claude-dotfiles` and runs its installer, which is what
+  brings the shell, the prompt, the runtimes and `~/.claude`. Needs an
+  authenticated `gh`, so on a fresh VM it says so and returns.
+- `login.sh` — `gh auth login` and `sudo tailscale up`, then `install.sh`
+  again, now that there is a token. Skipped without a terminal.
 - `keys.sh` — prompts for the commit-signing key and the `authorized_keys`.
-  Skipped when there is no terminal to prompt at, so `setup.sh` stays usable
-  from CI.
-- `harden-ssh.sh` — installs the sshd drop-in, last of the steps that change
-  the machine.
-- `login.sh` — `gh auth login` and `sudo tailscale up`, then `install.sh` again
-  for the half that was waiting on the login. Skipped without a terminal, same
-  as `keys.sh`.
+  After `login.sh`, because the `allowed_signers` principal is read from the
+  `.gitconfig` the dotfiles carry. Skipped without a terminal too, so
+  `setup.sh` stays usable from CI.
+- `harden-ssh.sh` — installs the sshd drop-in, last of all.
 
-`register-signing-key.sh` is called by the two above rather than by `setup.sh`,
-and runs on its own too.
+`register-signing-key.sh` is called by `install.sh` and `keys.sh` rather than
+by `setup.sh`, and runs on its own too.
 
 Debian only, and anything else is refused up front. Docker and tailscale
 publish a package tree per release, so those repository URLs are built from
@@ -165,16 +166,18 @@ since expired.
 
 ## Layout
 
-`home/` mirrors `$HOME` and `system/` mirrors `/etc`.
+`system/` mirrors `/etc`, and `fallback/` mirrors `$HOME`.
 
-| Path | Links to | |
+| Path | Goes to | |
 | --- | --- | --- |
-| `home/.zshrc` `.p10k.zsh` `.bashrc` | `$HOME` | Shell, prompt, bun and fnm on `PATH` |
-| `home/.gitconfig` | `$HOME` | SSH-signed commits, `gh` as the credential helper |
-| `home/.config/herdr/config.toml` | `$HOME` | Toast delivery and agent panel sort |
-| `home/.terminfo/x/xterm-ghostty` | `$HOME` | Ghostty terminfo for SSH sessions |
+| `fallback/.zshrc` `.bashrc` | `$HOME`, copied | A working shell until the dotfiles land |
 | `system/docker/daemon.json` | `/etc/docker/` | Binds to localhost, caps log size |
 | `system/ssh/10-hardening.conf` | `/etc/ssh/sshd_config.d/` | Keys only, no root, `AllowUsers` |
+
+The rc files are copied, not linked, which is what makes this clone
+disposable — and they carry a marker line so a re-run can tell its own file
+from a stock one. `claude-dotfiles` moves them aside to `<name>.backup` when it
+takes over.
 
 Paths use `$HOME` rather than a hardcoded home directory, and the sshd
 drop-in's `__USER__` placeholder is substituted at install time, so nothing
@@ -188,6 +191,11 @@ here depends on the account being named `claude`.
 `install.sh` honest about being safe to re-run. Then it seeds an
 `authorized_keys`, runs `harden-ssh.sh` and asserts once more, so both the
 refusal and the drop-in are covered.
+
+What no container reaches is the private half: `gh` is never logged in, so
+`install.sh` always takes its skip path and the dotfiles never arrive. The
+assertions for those — the symlinks, the tooling, the interactive shell — live
+in `claude-dotfiles`, which has a suite of the same shape.
 
 A second container per image covers `provision.sh` from the other end: nothing
 but root, a key handed in through `SSH_PUBLIC_KEYS`, and the same assertions
@@ -221,13 +229,13 @@ the SSH keys are `keys.sh`'s business — the signing key and the
 `authorized_keys` pasted in, `allowed_signers` derived there. `btop.conf` is
 left out too — it is all defaults, which btop rewrites on exit.
 
-Anything under `~/.claude` belongs in `claude-dotfiles`, not here.
+Anything personal belongs in `claude-dotfiles`, not here — `~/.claude`, the
+shell, the prompt, the runtimes.
 
 ## The private half
 
-The Claude Code configuration is fetched by `install.sh` once `gh` is logged
-in, which in a normal run means the pass `login.sh` makes at the end. By hand
-it is:
+It is fetched by `install.sh` once `gh` is logged in, which in a normal run
+means the pass `login.sh` makes on the way through. By hand it is:
 
 ```sh
 gh repo clone claude-dotfiles ~/claude-dotfiles
@@ -238,6 +246,7 @@ Being private is the whole reason it cannot happen earlier. `CLAUDE_DOTFILES_REP
 and `CLAUDE_DOTFILES_DIR` move it elsewhere, and a clone that fails — which is
 what it does for anyone who is not its owner — is a message, not a failed run.
 
-That repo links `CLAUDE.md`, `settings.json`, `skills/` and per-project memory
-into `~/.claude`, and carries the `PostToolUse` hook that keeps memory synced
-back to it.
+That repo installs oh-my-zsh, powerlevel10k, bun, fnm and node, Claude Code
+and herdr; links `home/` into `$HOME`; links `CLAUDE.md`, `settings.json`,
+`skills/` and per-project memory into `~/.claude`; and carries the `PostToolUse`
+hook that keeps memory synced back to it.

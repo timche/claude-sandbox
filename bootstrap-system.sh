@@ -84,3 +84,28 @@ zsh_path="$(command -v zsh)"
 if [ "$(getent passwd "$USER" | cut -d: -f7)" != "$zsh_path" ]; then
   sudo chsh -s "$zsh_path" "$USER"
 fi
+
+# Switching the login shell above is what makes these urgent: without an rc
+# file the next login is a bare zsh. The real ones come from claude-dotfiles,
+# which needs a GitHub login first, so these cover the gap and its installer
+# moves them aside to <name>.backup when it takes over.
+#
+# Copied, not linked — the clone has to stay on disk for a symlink, and not
+# needing it to is the point.
+for rc in .zshrc .bashrc; do
+  target="$HOME/$rc"
+
+  # A symlink means claude-dotfiles has already taken over, and nothing here
+  # gets to undo that.
+  [ -L "$target" ] && continue
+
+  # Debian ships a .bashrc in /etc/skel, so there is usually something real
+  # here on the first run. Keep it the way the dotfiles installer would.
+  if [ -e "$target" ] && ! grep -q 'claude-sandbox fallback' "$target"; then
+    mv "$target" "$target.backup"
+    echo "moved aside $target -> $target.backup"
+  fi
+
+  install -m 0644 "$repo/fallback/$rc" "$target"
+  echo "installed the fallback $rc"
+done

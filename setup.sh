@@ -43,6 +43,17 @@ repo="$(cd "$(dirname "$source_path")" && pwd)"
 "$repo/bootstrap-system.sh"
 "$repo/install.sh"
 
+# Before keys.sh, because that reads user.email out of the .gitconfig only the
+# dotfiles carry, and login.sh is what fetches them. Needs a terminal for the
+# browser flow.
+if [ -t 0 ]; then
+  "$repo/login.sh"
+else
+  echo
+  echo "Skipped login.sh — no terminal. Run $repo/login.sh to log in to GitHub"
+  echo "and tailscale, and to fetch the dotfiles."
+fi
+
 keys_failed=0
 
 # Prompts for a paste, so there has to be a terminal to prompt at.
@@ -53,30 +64,19 @@ else
   echo "Skipped keys.sh — no terminal. Run $repo/keys.sh to install the SSH keys."
 fi
 
-# Last of the steps that change the machine, because it is the one that turns
-# password logins off. It skips itself when there is no authorized_keys yet,
-# rather than locking you out.
+# Last, because it is the step that turns password logins off. It skips itself
+# when there is no authorized_keys yet, rather than locking you out.
 "$repo/harden-ssh.sh"
-
-# Then the logins, which change nothing here but need a browser somewhere else.
-# It reruns install.sh itself for the half that was waiting on gh.
-if [ -t 0 ]; then
-  "$repo/login.sh"
-else
-  echo
-  echo "Skipped login.sh — no terminal. Run $repo/login.sh to log in to GitHub"
-  echo "and tailscale, and to finish the parts that need an account."
-fi
 
 echo
 echo "Done. What is left:"
 echo
 
 # Still not logged in means login.sh was skipped or did not finish, and with it
-# the gh-stack extension, the signing key and ~/.claude.
+# the dotfiles: the shell is running on the fallback rc files.
 if ! gh auth status >/dev/null 2>&1; then
-  echo "  - $repo/login.sh — GitHub and tailscale, then it reruns install.sh for"
-  echo "    the gh-stack extension, the signing key and the private dotfiles."
+  echo "  - $repo/login.sh — GitHub and tailscale, then it fetches the dotfiles"
+  echo "    and hands the shell, the runtimes and ~/.claude over to them."
 elif ! tailscale status >/dev/null 2>&1; then
   echo "  - sudo tailscale up — $repo/login.sh tried and did not get there."
 fi

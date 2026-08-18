@@ -94,10 +94,22 @@ for image in "${images[@]}"; do
     # key stands in for the paste, and the empty line after it ends the
     # authorized_keys list. Signing a commit and verifying it is the assertion:
     # it exercises the derived .pub and the trust list keys.sh writes, and fails
-    # if either the paste handling or the git config is wrong.
+    # if the paste handling is wrong.
+    #
+    # The signing config is written here rather than coming from a linked
+    # .gitconfig, because that file lives in claude-dotfiles now and no
+    # container ever gets that far. It has to be in place before keys.sh runs:
+    # user.email is what keys.sh writes into allowed_signers as the principal,
+    # and a signature verifies against nothing if the two disagree.
     echo "--- keys.sh"
     if docker exec -u "$user" -e HOME="/home/$user" "$container" bash -c "
       set -e
+      git config --global user.name tester
+      git config --global user.email tester@example.com
+      git config --global gpg.format ssh
+      git config --global user.signingkey '~/.ssh/git-signing.pub'
+      git config --global gpg.ssh.allowedSignersFile '~/.ssh/allowed_signers'
+      git config --global commit.gpgsign true
       ssh-keygen -q -t ed25519 -N '' -C pasted -f /tmp/pasted
       { cat /tmp/pasted; printf '\n'; } |
         script -qec /home/$user/claude-sandbox/keys.sh /dev/null

@@ -8,9 +8,6 @@
 
 set -uo pipefail
 
-export PATH="$HOME/.local/bin:$HOME/.bun/bin:$HOME/.local/share/fnm:$PATH"
-eval "$(fnm env --shell bash)" 2>/dev/null || true
-
 failures=0
 
 check() {
@@ -24,42 +21,27 @@ check() {
   fi
 }
 
-# Symlinks. -L and -e together mean the link exists and its target does too, so
-# a link left pointing at a moved file counts as a failure.
-for path in .zshrc .p10k.zsh .bashrc .gitconfig \
-            .config/herdr/config.toml .terminfo/x/xterm-ghostty; do
-  check "$path is a live symlink" "[ -L \"\$HOME/$path\" ] && [ -e \"\$HOME/$path\" ]"
+# The fallback rc files, copied rather than linked so the clone stays
+# disposable. Real content found at a target is kept, the way the dotfiles
+# installer keeps this one.
+for rc in .zshrc .bashrc; do
+  check "$rc is the fallback, not a symlink" \
+    "[ -f \"\$HOME/$rc\" ] && [ ! -L \"\$HOME/$rc\" ] && grep -q 'claude-sandbox fallback' \"\$HOME/$rc\""
 done
 
-# This repo is public, so nothing under ~/.claude may ship from it — that lives
-# in the private claude-dotfiles repo. A stray memory path here would be a leak.
-check "no claude config in this repo" '! ls "$HOME/claude-sandbox/home/.claude" 2>/dev/null'
-
-# Nothing was clobbered on the way in.
 check "the stock .bashrc was preserved, not overwritten" '[ -f "$HOME/.bashrc.backup" ]'
 
-# User tooling.
-check "bun runs"            'bun --version'
-check "bun tracks canary"   'bun --revision | grep -q canary'
-check "fnm runs"            'fnm --version'
-check "node is the lts"     'node --version | grep -q "^v24\."'
-check "npm runs"            'npm --version'
-check "claude runs"         'claude --version'
-check "herdr runs"          'herdr --version'
-check "herdr is on stable"  'herdr channel show | grep -q stable'
-check "oh-my-zsh present"   '[ -d "$HOME/.oh-my-zsh" ]'
-check "powerlevel10k present" '[ -d "$HOME/.oh-my-zsh/custom/themes/powerlevel10k" ]'
+# The login shell is switched to zsh here, so the fallback has to survive being
+# sourced by one — with no oh-my-zsh underneath it, which is the state a VM
+# sits in until someone logs in to GitHub.
+check "interactive zsh starts on the fallback"  'zsh -ic "echo ok" | grep -q ok'
+check "interactive bash starts on the fallback" 'bash -ic "echo ok" | grep -q ok'
 
-# The rc files have to work in a real interactive shell, which is the only
-# place the fnm and bun blocks are reached.
-check "interactive zsh resolves node"  'zsh -ic "node --version" | grep -q "^v"'
-check "interactive bash resolves node" 'bash -ic "node --version" | grep -q "^v"'
-check "interactive zsh loads powerlevel10k" 'zsh -ic "echo \$ZSH_THEME" | grep -q powerlevel10k'
-
-# git config survives the $HOME rewrite and stays readable through the symlink.
-check "git reads the linked config" 'git config --get user.email | grep -q "@"'
-check "commit signing stays on"     'git config --get commit.gpgsign | grep -q true'
-check "signing key path expands"    '[ "$(git config --get user.signingkey)" = "~/.ssh/git-signing.pub" ]'
+# This repo is public and holds no personal configuration at all now — the
+# shell, the runtimes and ~/.claude all come from the private one. A stray dot
+# directory here would be a leak.
+check "no personal config in this repo" \
+  '! find "$HOME/claude-sandbox" \( -name .claude -o -name home \) -not -path "*/.git/*" | grep -q .'
 
 # System side.
 check "login shell is zsh"      'getent passwd "$USER" | cut -d: -f7 | grep -q zsh'

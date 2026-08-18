@@ -4,9 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Shell provisioning for a Debian VM dedicated to running Claude Code. No build,
-no lint, no package manager — the deliverable is the scripts themselves plus
-the dotfiles they link.
+Machine provisioning for a Debian VM dedicated to running Claude Code. No
+build, no lint, no package manager — the deliverable is the scripts themselves.
+
+This repo is public and holds nothing personal: the shell, the prompt, the
+runtimes and everything under `~/.claude` live in the private
+`claude-dotfiles`, which `install.sh` clones once `gh` is logged in. The line
+between the two is *works before you can authenticate* against *needs an
+account*.
 
 ## Testing
 
@@ -36,8 +41,10 @@ it tests HEAD and not the working tree**. Commit before trusting its result;
 CI (`.github/workflows/test.yml`) runs `test/run.sh debian:13` on every push
 and PR.
 
-`assert.sh` pins the Node major (`^v24\.`) because `install.sh` runs
-`fnm install --lts`. That pin needs bumping whenever the LTS line moves.
+Nothing here covers the private half — `gh` is never authenticated inside a
+container, so `install.sh` always takes its skip path. The assertions for the
+dotfiles, the tooling and the interactive shell live in `claude-dotfiles`,
+which has a suite of the same shape.
 
 ## Architecture
 
@@ -51,11 +58,13 @@ Two entry points converge on `setup.sh`:
 - `setup.sh` — runs as the **user**. Works from a clone or piped from the web,
   in which case it clones first and re-execs the copy inside. Calls the halves
   in order: `bootstrap-system.sh` (sudo, system packages, docker/gh/tailscale
-  repos, login shell), `install.sh` (no sudo, user tooling and the symlinks),
-  `keys.sh`, `harden-ssh.sh`, `login.sh`.
+  repos, login shell, fallback rc files), `install.sh` (clones
+  `claude-dotfiles` and runs its installer), `login.sh`, `keys.sh`,
+  `harden-ssh.sh`.
 
-`home/` mirrors `$HOME` and `system/` mirrors `/etc`. `install.sh` symlinks out
-of `home/`, so the clone has to stay on disk — it is not a scratch copy.
+`system/` mirrors `/etc`, and `fallback/` mirrors `$HOME` — but its two rc
+files are **copied**, not linked, so that this clone stays disposable. Only
+`harden-ssh.sh` still reads out of it at runtime.
 
 ### Ordering constraints that are not obvious
 
@@ -68,10 +77,17 @@ of `home/`, so the clone has to stay on disk — it is not a scratch copy.
   keeps `setup.sh` usable from CI. If either script ever stops bailing out
   headlessly, the suite hangs instead of failing — `assert.sh` runs `login.sh`
   under `timeout` for exactly that reason.
-- `login.sh` runs after `harden-ssh.sh` and ends by rerunning `install.sh`,
-  which is the only way the gh-authenticated half of that script (gh-stack, the
-  signing key, `claude-dotfiles`) gets reached on a fresh VM. Nothing in the
-  test suite covers it: `gh` is never logged in inside a container.
+- `login.sh` runs **before** `keys.sh`, not last: `keys.sh` reads `user.email`
+  for the `allowed_signers` principal out of the `.gitconfig` that only arrives
+  with the dotfiles, and `login.sh` is what fetches them. It ends by rerunning
+  `install.sh`, which is the only way the private half is reached on a fresh
+  VM. Nothing in the test suite covers that: `gh` is never logged in inside a
+  container.
+- The fallback rc files exist because `bootstrap-system.sh` makes zsh the login
+  shell long before the real ones can be cloned. They are copied, carry a
+  `claude-sandbox fallback` marker line so a re-run can tell its own file from
+  a stock one, and the dotfiles installer moves them aside to `<name>.backup`
+  when it takes over.
 - `provision.sh` lends the user a `NOPASSWD` sudoers drop-in for the length of
   the run only, removed by an EXIT trap, because the fresh password would
   otherwise expire out of sudo's timestamp partway through a long apt run.
@@ -92,11 +108,12 @@ substituted at install time.
 Debian only. Anything else is refused up front, and the docker and tailscale
 repository URLs are built from `VERSION_CODENAME` in `/etc/os-release`.
 
-**Nothing under `~/.claude` ships from this repo.** It is public; the Claude
-Code configuration lives in the private `claude-dotfiles` repo, and
-`assert.sh` fails if `home/.claude` appears here. `install.sh` clones that repo
-and runs its `install.sh`, but only with an authenticated `gh` — and a clone
-that fails is a message, since nobody but the owner can read it.
+**Nothing personal ships from this repo.** It is public; the shell, the
+prompt, the runtimes and the Claude Code configuration all live in the private
+`claude-dotfiles`, and `assert.sh` fails if a `home/` or `.claude` path appears
+here. `install.sh` clones that repo and runs its installer, but only with an
+authenticated `gh` — and a clone that fails is a message, not a failed run,
+since nobody but the owner can read it.
 
 ## Credentials
 
@@ -117,9 +134,9 @@ the `write:ssh_signing_key` scope, which is separate from `admin:public_key`
 and which `gh auth login` does not request. Every blocker — no key, no `gh`,
 not logged in, no scope — exits 0 with a message, because on a fresh VM all of
 them are true when `setup.sh` runs and the run has to carry on. `install.sh`
-and `keys.sh` both call it: the first is the script you rerun after logging in,
-the second because pasting a key there orphans the one `install.sh` registered
-earlier in the same run.
+and `keys.sh` both call it: the first because it is the script that runs once
+`gh` works, the second because pasting a key there orphans the one already
+registered.
 
 ## Environment knobs
 
