@@ -52,16 +52,16 @@ echo "Done. What is left:"
 echo
 
 # Still not logged in means login.sh was skipped or did not finish, and with it
-# the dotfiles: the account is still on bash with nothing but Debian's rc.
+# the dotfiles and the Claude Code login: the account is still on bash with
+# nothing but Debian's rc.
 if ! gh auth status >/dev/null 2>&1; then
-  echo "  - $repo/login.sh — GitHub and tailscale, then it fetches the dotfiles"
-  echo "    and hands the shell, the runtimes and ~/.claude over to them."
+  echo "  - $repo/login.sh — GitHub, tailscale and Claude Code, and the rerun"
+  echo "    that fetches the dotfiles in between."
 elif ! tailscale status >/dev/null 2>&1; then
   echo "  - sudo tailscale up — $repo/login.sh tried and did not get there."
 fi
 
 cat <<'EOF'
-  - claude, then /login
   - Log out and back in so the docker group and the zsh login shell take hold.
 EOF
 

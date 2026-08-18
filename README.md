@@ -16,8 +16,9 @@ That is the only entry point. It creates the account, clones this repo and runs
 `setup.sh` as that user, which builds the machine and then fetches the private
 `claude-dotfiles` — the shell, the prompt, the runtimes and `~/.claude`.
 
-Afterwards: `claude` then `/login`, and log out and back in for the docker
-group and the login shell.
+`login.sh` drives all three account logins on the way through — GitHub,
+tailscale and Claude Code — so the only thing left afterwards is to log out and
+back in, for the docker group and the login shell.
 
 `CLAUDE.md` has the details: the order the scripts run in, the constraints that
 are not obvious from reading them, and how to test.
