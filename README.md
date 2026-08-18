@@ -19,32 +19,31 @@ A test asserts no personal path can appear here.
 
 ## Usage
 
-On a VM that already has your account, as that account:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/timche/claude-sandbox/main/setup.sh | bash
-```
-
-On one that arrived as root and nothing else — a netcup or hetzner box, say —
-as root:
+As root, which is how a VM arrives from a provider — a netcup or hetzner box,
+say:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/timche/claude-sandbox/main/provision.sh | bash
 ```
 
-No authentication needed — this repo is public. Piped in like that, `setup.sh`
-installs `git` if the image lacks it, clones the repo to `~/claude-sandbox`,
-and hands over to the copy inside it. Re-running pulls and goes again.
+That is the only entry point. No authentication needed, since this repo is
+public. It installs `git`, clones to `~/claude-sandbox`, and hands over to
+`setup.sh` running as the account it just created. Re-running pulls and goes
+again.
+
+`setup.sh` is the other half rather than another way in, and it refuses to run
+as root: everything it does lands in one user's `$HOME`. Rerun it as that user
+from the clone to pick up a change.
 
 Nothing symlinks out of this clone, so it is disposable once the run is done —
 `harden-ssh.sh` is the only script that still reads a file from it. It lives at
 `~/claude-sandbox`, or set `CLAUDE_SANDBOX_DIR` to put it elsewhere. The
 private clone is the one that has to stay on disk.
 
-If the image has no `curl` either, `sudo apt-get install -y curl` first, or
-clone by hand and run `~/claude-sandbox/setup.sh` directly — both work.
+If the image has no `curl`, `apt-get install -y curl` first, or clone by hand
+and run `provision.sh` from the clone — both work.
 
-### From root
+### What root is for
 
 `provision.sh` covers the one thing `setup.sh` cannot do for itself: exist as a
 user. It creates the account (`claude`, or `CLAUDE_SANDBOX_USER`), puts it in
@@ -61,8 +60,8 @@ session. On a re-run it asks before replacing a password that is already set,
 the way `keys.sh` asks before replacing a signing key.
 
 Then it clones the repo and runs `setup.sh` as the new user, which is where
-everything else happens. The two entry points converge there deliberately —
-`provision.sh` stops at the user boundary.
+everything else happens. `provision.sh` stops at the user boundary and does
+nothing `setup.sh` could do for itself — that split is why it stays short.
 
 For the length of that run only, the user gets a `NOPASSWD` sudoers drop-in,
 removed on exit: `setup.sh` sudos through a long apt run, and the password just

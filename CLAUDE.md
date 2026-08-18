@@ -48,15 +48,14 @@ which has a suite of the same shape.
 
 ## Architecture
 
-Two entry points converge on `setup.sh`:
+One entry point, always as root, splitting at the user boundary:
 
-- `provision.sh` — runs as **root** on a VM that has nothing but root. Creates
-  the user, generates its password, inherits root's `authorized_keys`, clones
-  the repo, then hands over to `setup.sh` as that user. It deliberately does
-  nothing `setup.sh` could do for itself, which is why it stops at the user
-  boundary.
-- `setup.sh` — runs as the **user**. Works from a clone or piped from the web,
-  in which case it clones first and re-execs the copy inside. Calls the halves
+- `provision.sh` — the entry point. Runs as **root**, because that is all a
+  fresh VM has. Creates the user, generates its password, inherits root's
+  `authorized_keys`, clones the repo, then hands over to `setup.sh` as that
+  user. It deliberately does nothing `setup.sh` could do for itself.
+- `setup.sh` — runs as the **user**, and refuses to run as root: every path in
+  it is under one `$HOME`. Rerunnable by hand from the clone. Calls the halves
   in order: `bootstrap-system.sh` (sudo, system packages, docker/gh/tailscale
   repos, login shell, fallback rc files), `install.sh` (clones
   `claude-dotfiles` and runs its installer), `login.sh`, `keys.sh`,

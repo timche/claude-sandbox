@@ -1,13 +1,15 @@
 #!/bin/bash
 
-# Provision a VM the way a fresh one arrives from a provider: root over SSH, no
-# unprivileged account yet. Creates that account, gives it the keys root is
-# already reachable with, and hands everything else to setup.sh running as it.
+# The entry point, and the only one. A VM arrives the way a provider hands it
+# over — root over SSH, no unprivileged account yet — so the run has to start
+# as root whether or not the account already exists.
 #
 #   curl -fsSL https://raw.githubusercontent.com/timche/claude-sandbox/main/provision.sh | bash
 #
-# Nothing here duplicates setup.sh. Once the user exists, the two paths are the
-# same path — which is why this script is short and setup.sh is not.
+# It creates that account, gives it the keys root is already reachable with,
+# and hands everything else to setup.sh running as it. Nothing here duplicates
+# setup.sh: this is the part that cannot be done from inside the account it is
+# creating, which is why it is short and setup.sh is not.
 #
 # Safe to re-run: an existing user is reused, and keys are merged rather than
 # replaced.
@@ -26,8 +28,8 @@ root_keys=/root/.ssh/authorized_keys
 sudoers_drop_in="/etc/sudoers.d/90-claude-sandbox-provision"
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "provision.sh has to run as root — it creates the user. Already have" >&2
-  echo "an account? Run setup.sh as that account instead." >&2
+  echo "provision.sh has to run as root — it creates the user, authorizes keys" >&2
+  echo "and lends itself sudo for the run. Log in as root and start again." >&2
   exit 1
 fi
 
@@ -147,7 +149,7 @@ fi
 
 # The repo
 
-target="$home/claude-sandbox"
+target="${CLAUDE_SANDBOX_DIR:-$home/claude-sandbox}"
 
 if [ -d "$target/.git" ]; then
   sudo -u "$user" git -C "$target" pull --ff-only

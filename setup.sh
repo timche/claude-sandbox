@@ -1,44 +1,23 @@
 #!/bin/bash
 
-# Set up a VM from scratch. See README.md for the steps that stay manual.
+# The per-user half of the run: everything from a working account onwards. See
+# README.md for the steps that stay manual.
 #
-# Works two ways: run from a clone, or piped straight from the web, in which
-# case it clones the repo first and hands over to the copy inside it. The clone
-# is not a convenience — install.sh symlinks the dotfiles out of it, so the
-# repo has to stay on disk.
+# Not an entry point. provision.sh is, and it runs as root because a VM arrives
+# with nothing else — it creates the account and calls this as it. Rerunning
+# this by hand from the clone is fine and is how you pick up a change; running
+# it as root is not, since every path here belongs to one user.
 
 set -euo pipefail
 
-repo_url="${CLAUDE_SANDBOX_REPO:-https://github.com/timche/claude-sandbox.git}"
-target="${CLAUDE_SANDBOX_DIR:-$HOME/claude-sandbox}"
-
-# Empty when piped in, since there is no file backing the script.
-source_path="${BASH_SOURCE[0]:-}"
-
-if [ -z "$source_path" ] || [ ! -f "$(dirname "$source_path")/bootstrap-system.sh" ]; then
-  if ! command -v git >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y git
-  fi
-
-  if [ -d "$target/.git" ]; then
-    git -C "$target" pull --ff-only
-  else
-    git clone "$repo_url" "$target"
-  fi
-
-  # stdin is the pipe feeding this script, so hand the real terminal to the
-  # clone — otherwise the key prompts and any sudo password have nowhere to go.
-  # /dev/tty exists even with no controlling terminal, so opening it is the only
-  # honest test; without this, a piped run on a headless box dies here.
-  if (exec </dev/tty) 2>/dev/null; then
-    exec "$target/setup.sh" </dev/tty
-  fi
-
-  exec "$target/setup.sh"
+if [ "$(id -u)" -eq 0 ]; then
+  echo "setup.sh runs as the user it is setting up, not as root — everything" >&2
+  echo "here lands in \$HOME. On a bare VM start with provision.sh instead," >&2
+  echo "which creates the account and calls this from it." >&2
+  exit 1
 fi
 
-repo="$(cd "$(dirname "$source_path")" && pwd)"
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 "$repo/bootstrap-system.sh"
 "$repo/install.sh"

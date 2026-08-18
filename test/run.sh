@@ -71,6 +71,18 @@ for image in "${images[@]}"; do
 
   stage_failed=0
 
+  # provision.sh is the entry point, so setup.sh has to turn root away: every
+  # path in it lands in one user's $HOME, and root running it would scatter
+  # them through /root.
+  echo "--- setup.sh as root"
+  if docker exec -e DEBIAN_FRONTEND=noninteractive "$container" \
+    bash "/home/$user/claude-sandbox/setup.sh" >>"$log" 2>&1; then
+    echo "  FAIL  setup.sh refuses to run as root"
+    stage_failed=1
+  else
+    echo "  ok    setup.sh refuses to run as root"
+  fi
+
   echo "--- setup.sh"
   if ! run_in_container "$container" setup.sh >>"$log" 2>&1; then
     echo "  FAIL  setup.sh exited non-zero"
