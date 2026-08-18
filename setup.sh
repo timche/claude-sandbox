@@ -57,8 +57,23 @@ echo
 if ! gh auth status >/dev/null 2>&1; then
   echo "  - $repo/login.sh — GitHub, tailscale and Claude Code, and the rerun"
   echo "    that fetches the dotfiles in between."
-elif ! tailscale status >/dev/null 2>&1; then
-  echo "  - sudo tailscale up — $repo/login.sh tried and did not get there."
+else
+  # Separate ifs rather than a cascade: tailscale and the Claude Code login
+  # are two browser flows that fail on their own, and neither says anything
+  # about the other.
+  if ! tailscale status >/dev/null 2>&1; then
+    echo "  - sudo tailscale up — $repo/login.sh tried and did not get there."
+  fi
+
+  # claude arrives with the dotfiles, in ~/.local/bin, which this shell has no
+  # reason to have on PATH.
+  export PATH="$HOME/.local/bin:$PATH"
+
+  if ! command -v claude >/dev/null 2>&1; then
+    echo "  - $repo/install.sh — it did not get as far as installing claude."
+  elif ! claude auth status >/dev/null 2>&1; then
+    echo "  - claude auth login — $repo/login.sh tried and did not get there."
+  fi
 fi
 
 cat <<'EOF'
