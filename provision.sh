@@ -39,6 +39,12 @@ if [ "$distro" != debian ]; then
   exit 1
 fi
 
+# A run killed outright — SIGKILL, a reboot, the VM pulled out from under it —
+# never reaches the trap that takes the sudo grant at the end back out, and what
+# it leaves behind is a standing passwordless sudo. Clearing it up front is what
+# makes the re-run heal that rather than step over it.
+rm -f "$sudoers_drop_in"
+
 # Enough to create the user and clone the repo. bootstrap-system.sh, running
 # later as the user, is what installs the rest.
 apt-get update

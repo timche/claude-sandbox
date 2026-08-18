@@ -5,8 +5,8 @@
 # password logins off: hardening before there is an authorized_keys to log in
 # with leaves a box only reachable from the provider's console.
 #
-# So it refuses when the user has no keys. FORCE_HARDEN=true overrides that,
-# for the case where you are certain of another way in.
+# So it refuses when the user has no key it can parse. FORCE_HARDEN=true
+# overrides that, for the case where you are certain of another way in.
 #
 # Safe to re-run, and takes the user to allow as its argument, defaulting to
 # whoever runs it.
@@ -23,16 +23,24 @@ if [ -z "$home" ]; then
   exit 1
 fi
 
-if [ ! -s "$home/.ssh/authorized_keys" ] && [ "${FORCE_HARDEN:-false}" != true ]; then
+# A file with something in it is not a file sshd can let you in with: a
+# wrapped or truncated paste leaves lines that parse as nothing. ssh-keygen -l
+# reads the whole file and succeeds if any one line is a key, which is the
+# question actually worth asking before turning password logins off.
+has_usable_key() {
+  ssh-keygen -l -f "$home/.ssh/authorized_keys" >/dev/null 2>&1
+}
+
+if ! has_usable_key && [ "${FORCE_HARDEN:-false}" != true ]; then
   echo
-  echo "Skipped ssh hardening: $user has no authorized_keys, so disabling" >&2
+  echo "Skipped ssh hardening: $user has no key sshd could use, so disabling" >&2
   echo "password logins now would lock you out. Install a key, then run" >&2
   echo "  $repo/harden-ssh.sh $user" >&2
   exit 0
 fi
 
-if [ ! -s "$home/.ssh/authorized_keys" ]; then
-  echo "warning: hardening with no key installed (FORCE_HARDEN=true)." >&2
+if ! has_usable_key; then
+  echo "warning: hardening with no usable key installed (FORCE_HARDEN=true)." >&2
 fi
 
 staged="$(mktemp)"

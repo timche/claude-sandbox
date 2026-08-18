@@ -138,6 +138,25 @@ for image in "${images[@]}"; do
       stage_failed=1
     fi
 
+    # Non-empty is not the same as usable: a wrapped or truncated paste leaves
+    # a file with lines in it that parse as nothing, and hardening on the
+    # strength of that is a box nobody can log in to.
+    echo "--- harden-ssh.sh with an unusable key"
+    docker exec -u "$user" -e HOME="/home/$user" "$container" bash -c "
+      set -e
+      mkdir -p /home/$user/.ssh
+      chmod 700 /home/$user/.ssh
+      printf 'ssh-ed25519 AAAAtruncated\n' > /home/$user/.ssh/authorized_keys
+    " >>"$log" 2>&1
+
+    if run_in_container "$container" harden-ssh.sh >>"$log" 2>&1 &&
+      docker exec "$container" test ! -f /etc/ssh/sshd_config.d/10-hardening.conf; then
+      echo "  ok    harden-ssh.sh refuses a key sshd cannot use"
+    else
+      echo "  FAIL  harden-ssh.sh refuses a key sshd cannot use"
+      stage_failed=1
+    fi
+
     # setup.sh leaves the box unhardened, since keys.sh cannot prompt without a
     # terminal. Seed a key the way a real run would and the drop-in should land.
     echo "--- harden-ssh.sh"

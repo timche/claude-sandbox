@@ -160,9 +160,20 @@ install_authorized_keys() {
   echo
 
   local line added=0
+  local staged
+  staged="$(mktemp)"
 
   while IFS= read -r line; do
     [ -n "${line//[[:space:]]/}" ] || break
+
+    # harden-ssh.sh reads this file as proof there is a way back in, so a
+    # wrapped or truncated paste has to be caught here — after it has turned
+    # password logins off is too late.
+    printf '%s\n' "$line" >"$staged"
+    if ! ssh-keygen -l -f "$staged" >/dev/null 2>&1; then
+      echo "  that does not parse as a public key; try again." >&2
+      continue
+    fi
 
     if [ -f "$authorized_keys" ] && grep -qxF "$line" "$authorized_keys"; then
       echo "  already present, skipped"
@@ -172,6 +183,8 @@ install_authorized_keys() {
     printf '%s\n' "$line" >>"$authorized_keys"
     added=$((added + 1))
   done
+
+  rm -f "$staged"
 
   touch "$authorized_keys"
   chmod 600 "$authorized_keys"

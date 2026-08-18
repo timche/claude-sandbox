@@ -52,8 +52,10 @@ check "unattended-upgrades switched on" \
 
 # harden-ssh.sh holds the drop-in back until there is a key to log in with, so
 # which half of this is asserted depends on whether run.sh has seeded one yet.
-# Both halves matter: the refusal is what keeps a fresh VM reachable.
-if [ -s "$HOME/.ssh/authorized_keys" ]; then
+# Both halves matter: the refusal is what keeps a fresh VM reachable. The test
+# is the one harden-ssh.sh gates on, not -s, or a file of unusable lines sends
+# this down the wrong half.
+if ssh-keygen -l -f "$HOME/.ssh/authorized_keys" >/dev/null 2>&1; then
   check "sshd drop-in names this user" \
     'grep -qx "AllowUsers $USER" /etc/ssh/sshd_config.d/10-hardening.conf'
   check "sshd drop-in kept no placeholder" \
