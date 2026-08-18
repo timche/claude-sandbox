@@ -112,3 +112,27 @@ EOF
   claude auth login ||
     echo "claude login did not finish — rerun $repo/login.sh to try again" >&2
 fi
+
+# The credential is only half of it: the TUI gates its first run on setup state
+# kept separately in ~/.claude.json, which no amount of `claude auth login`
+# writes. Without this the first interactive claude walks its first-launch
+# setup, and the opening screen of that is the login one all over again.
+#
+# hasCompletedOnboarding is not a documented setting, so this is written to
+# fall through quietly rather than fail the run: the cost of it going stale is
+# one login prompt, which is where we were anyway.
+config="$HOME/.claude.json"
+
+if claude auth status >/dev/null 2>&1 && [ -f "$config" ]; then
+  # Alongside the file rather than in /tmp, so the replacement is a rename on
+  # the same filesystem and never a half-written config.
+  patched="$(mktemp "$config.XXXXXX")"
+
+  if jq '.hasCompletedOnboarding = true' "$config" >"$patched"; then
+    mv "$patched" "$config"
+  else
+    rm -f "$patched"
+    echo "could not mark first-launch setup done in $config — the first" >&2
+    echo "interactive claude will ask to log in again" >&2
+  fi
+fi
