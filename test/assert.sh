@@ -21,30 +21,21 @@ check() {
   fi
 }
 
-# The fallback rc files, copied rather than linked so the clone stays
-# disposable. Real content found at a target is kept, the way the dotfiles
-# installer keeps this one.
-for rc in .zshrc .bashrc; do
-  check "$rc is the fallback, not a symlink" \
-    "[ -f \"\$HOME/$rc\" ] && [ ! -L \"\$HOME/$rc\" ] && grep -q 'claude-sandbox fallback' \"\$HOME/$rc\""
-done
-
-check "the stock .bashrc was preserved, not overwritten" '[ -f "$HOME/.bashrc.backup" ]'
-
-# The login shell is switched to zsh here, so the fallback has to survive being
-# sourced by one — with no oh-my-zsh underneath it, which is the state a VM
-# sits in until someone logs in to GitHub.
-check "interactive zsh starts on the fallback"  'zsh -ic "echo ok" | grep -q ok'
-check "interactive bash starts on the fallback" 'bash -ic "echo ok" | grep -q ok'
-
-# This repo is public and holds no personal configuration at all now — the
-# shell, the runtimes and ~/.claude all come from the private one. A stray dot
+# This repo is public and holds no personal configuration at all — the shell,
+# the runtimes and ~/.claude all come from the private one. A stray dot
 # directory here would be a leak.
 check "no personal config in this repo" \
   '! find "$HOME/claude-sandbox" \( -name .claude -o -name home \) -not -path "*/.git/*" | grep -q .'
 
+# zsh is installed but not switched to: claude-dotfiles owns that, because it
+# owns the .zshrc without which the next login hits zsh-newuser-install.
+check "zsh installed"             'command -v zsh'
+check "login shell is left alone" 'getent passwd "$USER" | cut -d: -f7 | grep -qv zsh'
+check "no rc file was planted"    '[ ! -e "$HOME/.zshrc" ]'
+check "the stock .bashrc is untouched" \
+  '[ -f "$HOME/.bashrc" ] && [ ! -e "$HOME/.bashrc.backup" ]'
+
 # System side.
-check "login shell is zsh"      'getent passwd "$USER" | cut -d: -f7 | grep -q zsh'
 check "user is in docker group" 'id -nG "$USER" | tr " " "\n" | grep -qx docker'
 check "user is in sudo group"   'id -nG "$USER" | tr " " "\n" | grep -qx sudo'
 check "docker installed"        'command -v docker'

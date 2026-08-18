@@ -57,13 +57,11 @@ One entry point, always as root, splitting at the user boundary:
 - `setup.sh` — runs as the **user**, and refuses to run as root: every path in
   it is under one `$HOME`. Rerunnable by hand from the clone. Calls the halves
   in order: `bootstrap-system.sh` (sudo, system packages, docker/gh/tailscale
-  repos, login shell, fallback rc files), `install.sh` (clones
-  `claude-dotfiles` and runs its installer), `login.sh`, `keys.sh`,
-  `harden-ssh.sh`.
+  repos), `install.sh` (clones `claude-dotfiles` and runs its installer),
+  `login.sh`, `keys.sh`, `harden-ssh.sh`.
 
-`system/` mirrors `/etc`, and `fallback/` mirrors `$HOME` — but its two rc
-files are **copied**, not linked, so that this clone stays disposable. Only
-`harden-ssh.sh` still reads out of it at runtime.
+`system/` mirrors `/etc` and is installed by copy, so this clone stays
+disposable. Only `harden-ssh.sh` still reads out of it at runtime.
 
 ### Ordering constraints that are not obvious
 
@@ -82,11 +80,11 @@ files are **copied**, not linked, so that this clone stays disposable. Only
   `install.sh`, which is the only way the private half is reached on a fresh
   VM. Nothing in the test suite covers that: `gh` is never logged in inside a
   container.
-- The fallback rc files exist because `bootstrap-system.sh` makes zsh the login
-  shell long before the real ones can be cloned. They are copied, carry a
-  `claude-sandbox fallback` marker line so a re-run can tell its own file from
-  a stock one, and the dotfiles installer moves them aside to `<name>.backup`
-  when it takes over.
+- `bootstrap-system.sh` installs zsh but never runs `chsh`. Making it the login
+  shell before `~/.zshrc` exists drops the next interactive login into
+  `zsh-newuser-install`, and that file ships from `claude-dotfiles` — so its
+  installer owns the switch. Until it runs, the account stays on bash with
+  Debian's stock `.bashrc`.
 - `provision.sh` lends the user a `NOPASSWD` sudoers drop-in for the length of
   the run only, removed by an EXIT trap, because the fresh password would
   otherwise expire out of sudo's timestamp partway through a long apt run.

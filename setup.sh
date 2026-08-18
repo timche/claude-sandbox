@@ -52,7 +52,7 @@ echo "Done. What is left:"
 echo
 
 # Still not logged in means login.sh was skipped or did not finish, and with it
-# the dotfiles: the shell is running on the fallback rc files.
+# the dotfiles: the account is still on bash with nothing but Debian's rc.
 if ! gh auth status >/dev/null 2>&1; then
   echo "  - $repo/login.sh — GitHub and tailscale, then it fetches the dotfiles"
   echo "    and hands the shell, the runtimes and ~/.claude over to them."

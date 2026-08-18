@@ -71,8 +71,8 @@ set would otherwise expire out of sudo's timestamp partway through.
 
 - `bootstrap-system.sh` — needs sudo, run once. apt upgrade and packages, the
   docker, github-cli and tailscale repositories, `/etc/docker/daemon.json`,
-  unattended-upgrades, docker group membership, zsh as the login shell, and the
-  fallback rc files that make that shell usable until the real ones arrive.
+  unattended-upgrades and docker group membership. It installs zsh but does not
+  switch to it — see below.
 - `install.sh` — clones `claude-dotfiles` and runs its installer, which is what
   brings the shell, the prompt, the runtimes and `~/.claude`. Needs an
   authenticated `gh`, so on a fresh VM it says so and returns.
@@ -133,6 +133,17 @@ though `git log --format='%G?'` reports `G` on the box itself.
 Then paste the public keys allowed to SSH in, one per line. Existing entries
 are not duplicated, and modes are set to 600 / 644 / 600.
 
+### The login shell
+
+`bootstrap-system.sh` installs zsh and stops there. Making it the login shell
+before `~/.zshrc` exists drops the next interactive login into
+`zsh-newuser-install` — a configuration wizard, on a box you have just SSHed
+into — and that file comes from `claude-dotfiles`. So the switch lives in that
+repo's installer, next to the config that makes it worth switching to.
+
+Until then the account stays on bash with Debian's stock `.bashrc`, which is a
+perfectly good shell. A VM that never gets a GitHub login keeps it.
+
 ### Hardening
 
 `harden-ssh.sh` is what turns password logins off, and it runs after `keys.sh`
@@ -165,18 +176,14 @@ since expired.
 
 ## Layout
 
-`system/` mirrors `/etc`, and `fallback/` mirrors `$HOME`.
+`system/` mirrors `/etc`. Nothing here mirrors `$HOME` at all.
 
 | Path | Goes to | |
 | --- | --- | --- |
-| `fallback/.zshrc` `.bashrc` | `$HOME`, copied | A working shell until the dotfiles land |
 | `system/docker/daemon.json` | `/etc/docker/` | Binds to localhost, caps log size |
 | `system/ssh/10-hardening.conf` | `/etc/ssh/sshd_config.d/` | Keys only, no root, `AllowUsers` |
 
-The rc files are copied, not linked, which is what makes this clone
-disposable — and they carry a marker line so a re-run can tell its own file
-from a stock one. `claude-dotfiles` moves them aside to `<name>.backup` when it
-takes over.
+Both are installed by copy, which is what makes this clone disposable.
 
 Paths use `$HOME` rather than a hardcoded home directory, and the sshd
 drop-in's `__USER__` placeholder is substituted at install time, so nothing
